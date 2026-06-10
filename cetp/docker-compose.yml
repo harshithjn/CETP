@@ -1,0 +1,22 @@
+version: "3.9"
+
+services:
+  cetp-api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ~/.cetp:/root/.cetp
+    environment:
+      - PYTHONPATH=/app/src
+    restart: unless-stopped
+
+  cetp-cli:
+    build: .
+    volumes:
+      - ~/.cetp:/root/.cetp
+      - ./data:/data
+    environment:
+      - PYTHONPATH=/app/src
+    entrypoint: ["cetp"]
+    profiles: ["cli"]

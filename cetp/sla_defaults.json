@@ -1,0 +1,14 @@
+{
+  "ML": {
+    "sla_runtime_sec": 20.0,
+    "warn_at_sec": 15.0
+  },
+  "DB": {
+    "sla_runtime_sec": 5.0,
+    "warn_at_sec": 3.5
+  },
+  "WEB": {
+    "sla_runtime_sec": 1.0,
+    "warn_at_sec": 0.7
+  }
+}

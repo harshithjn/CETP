@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cetp"
+version = "0.1.0"
+description = "Cross-Environment Execution Time Prediction with SLA-aware developer tooling"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [
+  { name = "Team 94, PES University" }
+]
+keywords = ["runtime-prediction", "sla", "devtools", "machine-learning", "xgboost"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Testing",
+  "Topic :: System :: Monitoring",
+]
+dependencies = [
+  "psutil>=5.9",
+  "xgboost>=2.0",
+  "shap>=0.44",
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.29",
+  "click>=8.1",
+  "joblib>=1.3",
+  "pandas>=2.0",
+  "numpy>=1.26",
+  "scikit-learn>=1.4",
+  "pydantic>=2.0",
+]
+
+[project.scripts]
+cetp = "cetp.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "pytest-cov>=4.1",
+  "ruff>=0.4",
+  "httpx>=0.27",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--cov=src/cetp --cov-report=term-missing"

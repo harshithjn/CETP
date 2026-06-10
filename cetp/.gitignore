@@ -1,0 +1,88 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+develop-eggs/
+.installed.cfg
+lib/
+lib64/
+.eggs/
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Testing & coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+.tox/
+nosetests.xml
+
+# Model artefacts (do not commit trained models)
+model/artifacts/*.pkl
+model/artifacts/*.json
+!model/artifacts/base_hyperparams.json
+
+# User-specific CETP directory
+~/.cetp/
+.cetp/
+
+# VS Code extension
+*.vsix
+vscode-ext/node_modules/
+vscode-ext/out/
+vscode-ext/.vscode-test/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Data files (company proprietary)
+data/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# JetBrains IDEs
+.idea/
+*.iml
+*.iws
+
+# VS Code
+.vscode/
+!.vscode/extensions.json
+
+# Mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Ruff
+.ruff_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# Logs
+*.log
+
+# Distribution / packaging
+MANIFEST
