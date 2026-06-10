@@ -1,22 +1,53 @@
-version: "3.9"
-
 services:
   cetp-api:
     build: .
+    container_name: cetp-api
     ports:
       - "8000:8000"
     volumes:
       - ~/.cetp:/root/.cetp
+      - ./model/artifacts:/app/model/artifacts
     environment:
       - PYTHONPATH=/app/src
+      - CETP_ENV=production
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  cetp-api-dev:
+    build: .
+    container_name: cetp-api-dev
+    ports:
+      - "8001:8000"
+    volumes:
+      - ~/.cetp:/root/.cetp
+      - ./model/artifacts:/app/model/artifacts
+      - ./src:/app/src
+      - ./api:/app/api
+    environment:
+      - PYTHONPATH=/app/src
+      - CETP_ENV=development
+    command: ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    profiles:
+      - dev
 
   cetp-cli:
     build: .
+    container_name: cetp-cli
     volumes:
       - ~/.cetp:/root/.cetp
+      - ./model/artifacts:/app/model/artifacts
       - ./data:/data
     environment:
       - PYTHONPATH=/app/src
-    entrypoint: ["cetp"]
-    profiles: ["cli"]
+    entrypoint: ["python", "-m", "cetp"]
+    profiles:
+      - cli
+
+networks:
+  default:
+    name: cetp-network

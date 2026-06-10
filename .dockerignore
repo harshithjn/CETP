@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual environments
+venv/
+env/
+.venv/
+.env/
+
+# Testing and coverage
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+coverage.xml
+*.cover
+
+# Model artifacts — mounted at runtime, not baked into image
+model/artifacts/*.pkl
+model/artifacts/*.json
+
+# Development files
+*.ipynb
+.jupyter/
+notebooks/
+
+# VS Code extension build
+vscode-ext/node_modules/
+vscode-ext/out/
+vscode-ext/*.vsix
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation
+*.md
+docs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Data files — too large for image
+data/
+*.csv
+
+# Secrets
+.env
+*.env
+secrets/
