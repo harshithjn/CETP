@@ -1,4 +1,5 @@
 """Unit tests for cetp.validator — Phase 4 Schema Validator."""
+
 import csv
 from typing import Optional
 
@@ -21,6 +22,7 @@ from cetp.validator import (
 # ---------------------------------------------------------------------------
 # Helper
 # ---------------------------------------------------------------------------
+
 
 def make_csv(tmp_path, rows: int = 600, overrides: Optional[dict] = None) -> str:
     """
@@ -99,6 +101,7 @@ def make_csv(tmp_path, rows: int = 600, overrides: Optional[dict] = None) -> str
 # File-level tests
 # ---------------------------------------------------------------------------
 
+
 class TestFileLevelBehavior:
     def test_file_not_found(self, tmp_path):
         """validate_csv raises FileNotFoundError for a nonexistent path."""
@@ -140,6 +143,7 @@ class TestFileLevelBehavior:
 # ---------------------------------------------------------------------------
 # Column validation tests
 # ---------------------------------------------------------------------------
+
 
 class TestColumnValidation:
     def test_missing_single_column(self, tmp_path):
@@ -192,6 +196,7 @@ class TestColumnValidation:
 # Row count tests
 # ---------------------------------------------------------------------------
 
+
 class TestRowCountValidation:
     def test_insufficient_rows_raises(self, tmp_path):
         """A CSV with fewer than MIN_ROW_COUNT rows raises InsufficientDataError."""
@@ -216,6 +221,7 @@ class TestRowCountValidation:
 # ---------------------------------------------------------------------------
 # runtime_sec tests
 # ---------------------------------------------------------------------------
+
 
 class TestRuntimeSec:
     def test_negative_runtime_raises(self, tmp_path):
@@ -242,6 +248,7 @@ class TestRuntimeSec:
 # ---------------------------------------------------------------------------
 # memory_pressure tests
 # ---------------------------------------------------------------------------
+
 
 class TestMemoryPressure:
     def test_memory_pressure_above_one_raises(self, tmp_path):
@@ -275,6 +282,7 @@ class TestMemoryPressure:
 # workload_type tests
 # ---------------------------------------------------------------------------
 
+
 class TestWorkloadType:
     def test_invalid_workload_type_raises(self, tmp_path):
         """workload_type='INVALID' is not in VALID_WORKLOAD_TYPES and raises."""
@@ -296,6 +304,7 @@ class TestWorkloadType:
 # disk_type tests
 # ---------------------------------------------------------------------------
 
+
 class TestDiskType:
     def test_invalid_disk_type_raises(self, tmp_path):
         """disk_type='OPTANE' is not in VALID_DISK_TYPES and raises ValidationError."""
@@ -315,6 +324,7 @@ class TestDiskType:
 # ---------------------------------------------------------------------------
 # cpu_avg_pct tests
 # ---------------------------------------------------------------------------
+
 
 class TestCpuAvgPct:
     def test_cpu_pct_above_100_raises(self, tmp_path):
@@ -336,6 +346,7 @@ class TestCpuAvgPct:
 # workload_complexity tests
 # ---------------------------------------------------------------------------
 
+
 class TestWorkloadComplexity:
     def test_complexity_out_of_range_raises(self, tmp_path):
         """workload_complexity=6 exceeds [1, 5] and raises ValidationError."""
@@ -356,6 +367,7 @@ class TestWorkloadComplexity:
 # Empty value tests
 # ---------------------------------------------------------------------------
 
+
 class TestEmptyValues:
     def test_empty_numeric_field_raises(self, tmp_path):
         """A row with an empty string in any NUMERIC_COLUMNS field raises ValidationError."""
@@ -369,6 +381,7 @@ class TestEmptyValues:
 # ---------------------------------------------------------------------------
 # Violation collection tests
 # ---------------------------------------------------------------------------
+
 
 class TestViolationCollection:
     def test_multiple_violations_collected(self, tmp_path):
@@ -393,6 +406,7 @@ class TestViolationCollection:
 # ---------------------------------------------------------------------------
 # Additional constraint tests (cpu_cores, disk_speed_class, non-numeric values)
 # ---------------------------------------------------------------------------
+
 
 class TestAdditionalConstraints:
     def test_cpu_cores_zero_raises(self, tmp_path):
@@ -435,6 +449,7 @@ class TestAdditionalConstraints:
 # export_schema_template tests
 # ---------------------------------------------------------------------------
 
+
 class TestExportSchemaTemplate:
     def test_export_creates_file(self, tmp_path):
         """export_schema_template creates a file at the given path."""
@@ -475,6 +490,7 @@ class TestExportSchemaTemplate:
 # ---------------------------------------------------------------------------
 # get_schema_info tests
 # ---------------------------------------------------------------------------
+
 
 class TestGetSchemaInfo:
     def test_schema_info_keys(self):

@@ -2,6 +2,7 @@
 BYOD trainer: fine-tunes a custom model on company-supplied data
 using warm-start hyperparameter transfer from the base model.
 """
+
 import os
 from pathlib import Path
 from typing import Optional
@@ -16,6 +17,7 @@ BASE_HYPERPARAMS_PATH = (
 
 class LowAccuracyWarning(UserWarning):
     """Emitted when the trained model's R² falls below MIN_R2_THRESHOLD."""
+
     pass
 
 

@@ -1,4 +1,5 @@
 """Unit tests for cetp.trainer (structural tests — no model artefact required)."""
+
 import pytest
 
 from cetp.trainer import CETTrainer, LowAccuracyWarning, MIN_R2_THRESHOLD
@@ -7,6 +8,7 @@ from cetp.trainer import CETTrainer, LowAccuracyWarning, MIN_R2_THRESHOLD
 # ---------------------------------------------------------------------------
 # Instantiation
 # ---------------------------------------------------------------------------
+
 
 class TestCETTrainerInstantiation:
     def test_instantiation_succeeds(self):
@@ -31,11 +33,14 @@ class TestCETTrainerInstantiation:
 # train() — missing base_hyperparams.json
 # ---------------------------------------------------------------------------
 
+
 class TestTrainMissingHyperparams:
     def test_raises_file_not_found_when_hyperparams_missing(self, tmp_path):
         """train() must raise FileNotFoundError when base_hyperparams.json is absent."""
         valid_csv = tmp_path / "data.csv"
-        valid_csv.write_text("run_id,workload_type\n1,ML\n")  # minimal CSV (not valid schema, but file exists)
+        valid_csv.write_text(
+            "run_id,workload_type\n1,ML\n"
+        )  # minimal CSV (not valid schema, but file exists)
 
         missing_hp = tmp_path / "nonexistent_hyperparams.json"
         trainer = CETTrainer(base_hyperparams_path=str(missing_hp))
@@ -63,6 +68,7 @@ class TestTrainMissingHyperparams:
 # train() — invalid CSV path
 # ---------------------------------------------------------------------------
 
+
 class TestTrainInvalidCsvPath:
     def test_raises_file_not_found_for_missing_csv(self, tmp_path):
         """train() must raise FileNotFoundError when the CSV path does not exist."""
@@ -83,6 +89,7 @@ class TestTrainInvalidCsvPath:
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
+
 
 class TestTrainerConstants:
     def test_min_r2_threshold_is_float(self):

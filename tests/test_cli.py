@@ -1,4 +1,5 @@
 """Tests for cetp CLI — Phase 6."""
+
 import csv
 import json
 import os
@@ -12,13 +13,26 @@ from cetp.cli import main
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_valid_csv(path: str, n_rows: int = 500) -> None:
     """Write a CETP-schema-valid CSV with n_rows data rows to path."""
     fieldnames = [
-        "run_id", "workload_type", "workload_name", "workload_complexity",
-        "cpu_cores", "memory_total_gb", "cpu_avg_pct", "effective_cpu",
-        "memory_avg_gb", "memory_pressure", "disk_read_mb", "disk_write_mb",
-        "io_intensity", "disk_type", "disk_speed_class", "runtime_sec",
+        "run_id",
+        "workload_type",
+        "workload_name",
+        "workload_complexity",
+        "cpu_cores",
+        "memory_total_gb",
+        "cpu_avg_pct",
+        "effective_cpu",
+        "memory_avg_gb",
+        "memory_pressure",
+        "disk_read_mb",
+        "disk_write_mb",
+        "io_intensity",
+        "disk_type",
+        "disk_speed_class",
+        "runtime_sec",
     ]
     types = ["ML", "DB", "WEB"]
     with open(path, "w", newline="", encoding="utf-8") as fh:
@@ -26,61 +40,78 @@ def _make_valid_csv(path: str, n_rows: int = 500) -> None:
         writer.writeheader()
         for i in range(n_rows):
             wt = types[i % 3]
-            writer.writerow({
-                "run_id": str(i),
-                "workload_type": wt,
-                "workload_name": f"wl_{i}",
-                "workload_complexity": str((i % 5) + 1),
-                "cpu_cores": "8",
-                "memory_total_gb": "16.0",
-                "cpu_avg_pct": "45.0",
-                "effective_cpu": "4.4",
-                "memory_avg_gb": "6.0",
-                "memory_pressure": "0.375",
-                "disk_read_mb": "100.0",
-                "disk_write_mb": "50.0",
-                "io_intensity": "10.0",
-                "disk_type": "SSD",
-                "disk_speed_class": "2",
-                "runtime_sec": f"{10.0 + i * 0.1:.2f}",
-            })
+            writer.writerow(
+                {
+                    "run_id": str(i),
+                    "workload_type": wt,
+                    "workload_name": f"wl_{i}",
+                    "workload_complexity": str((i % 5) + 1),
+                    "cpu_cores": "8",
+                    "memory_total_gb": "16.0",
+                    "cpu_avg_pct": "45.0",
+                    "effective_cpu": "4.4",
+                    "memory_avg_gb": "6.0",
+                    "memory_pressure": "0.375",
+                    "disk_read_mb": "100.0",
+                    "disk_write_mb": "50.0",
+                    "io_intensity": "10.0",
+                    "disk_type": "SSD",
+                    "disk_speed_class": "2",
+                    "runtime_sec": f"{10.0 + i * 0.1:.2f}",
+                }
+            )
 
 
 def _make_schema_violation_csv(path: str, n_rows: int = 500) -> None:
     """Write a 500-row CSV where every row has an invalid workload_type (triggers ValidationError)."""
     fieldnames = [
-        "run_id", "workload_type", "workload_name", "workload_complexity",
-        "cpu_cores", "memory_total_gb", "cpu_avg_pct", "effective_cpu",
-        "memory_avg_gb", "memory_pressure", "disk_read_mb", "disk_write_mb",
-        "io_intensity", "disk_type", "disk_speed_class", "runtime_sec",
+        "run_id",
+        "workload_type",
+        "workload_name",
+        "workload_complexity",
+        "cpu_cores",
+        "memory_total_gb",
+        "cpu_avg_pct",
+        "effective_cpu",
+        "memory_avg_gb",
+        "memory_pressure",
+        "disk_read_mb",
+        "disk_write_mb",
+        "io_intensity",
+        "disk_type",
+        "disk_speed_class",
+        "runtime_sec",
     ]
     with open(path, "w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
         writer.writeheader()
         for i in range(n_rows):
-            writer.writerow({
-                "run_id": str(i),
-                "workload_type": "INVALID",  # deliberate bad value
-                "workload_name": f"wl_{i}",
-                "workload_complexity": "3",
-                "cpu_cores": "8",
-                "memory_total_gb": "16.0",
-                "cpu_avg_pct": "45.0",
-                "effective_cpu": "4.4",
-                "memory_avg_gb": "6.0",
-                "memory_pressure": "0.375",
-                "disk_read_mb": "100.0",
-                "disk_write_mb": "50.0",
-                "io_intensity": "10.0",
-                "disk_type": "SSD",
-                "disk_speed_class": "2",
-                "runtime_sec": f"{10.0 + i * 0.1:.2f}",
-            })
+            writer.writerow(
+                {
+                    "run_id": str(i),
+                    "workload_type": "INVALID",  # deliberate bad value
+                    "workload_name": f"wl_{i}",
+                    "workload_complexity": "3",
+                    "cpu_cores": "8",
+                    "memory_total_gb": "16.0",
+                    "cpu_avg_pct": "45.0",
+                    "effective_cpu": "4.4",
+                    "memory_avg_gb": "6.0",
+                    "memory_pressure": "0.375",
+                    "disk_read_mb": "100.0",
+                    "disk_write_mb": "50.0",
+                    "io_intensity": "10.0",
+                    "disk_type": "SSD",
+                    "disk_speed_class": "2",
+                    "runtime_sec": f"{10.0 + i * 0.1:.2f}",
+                }
+            )
 
 
 # ---------------------------------------------------------------------------
 # cetp --version
 # ---------------------------------------------------------------------------
+
 
 def test_version():
     runner = CliRunner()
@@ -91,6 +122,7 @@ def test_version():
 # ---------------------------------------------------------------------------
 # cetp profile
 # ---------------------------------------------------------------------------
+
 
 def test_profile_runs_successfully():
     runner = CliRunner()
@@ -129,13 +161,21 @@ def test_profile_json_has_all_keys():
     result = runner.invoke(main, ["profile", "--json"])
     assert result.exit_code == 0
     data = json.loads(result.output)
-    for key in ("cpu_cores", "memory_total_gb", "disk_type", "disk_speed_class", "platform", "hostname"):
+    for key in (
+        "cpu_cores",
+        "memory_total_gb",
+        "disk_type",
+        "disk_speed_class",
+        "platform",
+        "hostname",
+    ):
         assert key in data, f"Key '{key}' missing from JSON output"
 
 
 # ---------------------------------------------------------------------------
 # cetp schema
 # ---------------------------------------------------------------------------
+
 
 def test_schema_shows_required_columns():
     runner = CliRunner()
@@ -186,10 +226,22 @@ def test_schema_export_file_has_headers(tmp_path):
         reader = csv.reader(fh)
         headers = next(reader)
     required = [
-        "run_id", "workload_type", "workload_name", "workload_complexity",
-        "cpu_cores", "memory_total_gb", "cpu_avg_pct", "effective_cpu",
-        "memory_avg_gb", "memory_pressure", "disk_read_mb", "disk_write_mb",
-        "io_intensity", "disk_type", "disk_speed_class", "runtime_sec",
+        "run_id",
+        "workload_type",
+        "workload_name",
+        "workload_complexity",
+        "cpu_cores",
+        "memory_total_gb",
+        "cpu_avg_pct",
+        "effective_cpu",
+        "memory_avg_gb",
+        "memory_pressure",
+        "disk_read_mb",
+        "disk_write_mb",
+        "io_intensity",
+        "disk_type",
+        "disk_speed_class",
+        "runtime_sec",
     ]
     for col in required:
         assert col in headers, f"Column '{col}' missing from exported template"
@@ -198,6 +250,7 @@ def test_schema_export_file_has_headers(tmp_path):
 # ---------------------------------------------------------------------------
 # cetp validate
 # ---------------------------------------------------------------------------
+
 
 def test_validate_missing_data_flag():
     runner = CliRunner()
@@ -255,6 +308,7 @@ def test_validate_shows_violations(tmp_path):
 # cetp info
 # ---------------------------------------------------------------------------
 
+
 def test_info_runs_successfully():
     runner = CliRunner()
     result = runner.invoke(main, ["info"])
@@ -308,61 +362,90 @@ def test_info_no_model_message():
 # cetp predict
 # ---------------------------------------------------------------------------
 
+
 def test_predict_without_model_exits_nonzero():
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "predict",
-        "--workload-type", "ML",
-        "--workload-name", "test_wl",
-        "--complexity", "3",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--workload-type",
+            "ML",
+            "--workload-name",
+            "test_wl",
+            "--complexity",
+            "3",
+        ],
+    )
     assert result.exit_code == 1
 
 
 def test_predict_without_model_shows_message():
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "predict",
-        "--workload-type", "ML",
-        "--workload-name", "test_wl",
-        "--complexity", "3",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--workload-type",
+            "ML",
+            "--workload-name",
+            "test_wl",
+            "--complexity",
+            "3",
+        ],
+    )
     assert "model" in result.output.lower() or "artefact" in result.output.lower()
 
 
 def test_predict_requires_workload_type():
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "predict",
-        "--workload-name", "test_wl",
-        "--complexity", "3",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--workload-name",
+            "test_wl",
+            "--complexity",
+            "3",
+        ],
+    )
     assert result.exit_code != 0
 
 
 def test_predict_requires_workload_name():
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "predict",
-        "--workload-type", "ML",
-        "--complexity", "3",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--workload-type",
+            "ML",
+            "--complexity",
+            "3",
+        ],
+    )
     assert result.exit_code != 0
 
 
 def test_predict_requires_complexity():
     runner = CliRunner()
-    result = runner.invoke(main, [
-        "predict",
-        "--workload-type", "ML",
-        "--workload-name", "test_wl",
-    ])
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--workload-type",
+            "ML",
+            "--workload-name",
+            "test_wl",
+        ],
+    )
     assert result.exit_code != 0
 
 
 # ---------------------------------------------------------------------------
 # cetp train
 # ---------------------------------------------------------------------------
+
 
 def test_train_without_data_flag():
     runner = CliRunner()
@@ -408,6 +491,7 @@ def test_train_valid_csv_missing_hyperparams(tmp_path):
 # ---------------------------------------------------------------------------
 # cetp validate — ValidationError branch (schema violations, not row count)
 # ---------------------------------------------------------------------------
+
 
 def test_validate_schema_violation_csv(tmp_path):
     """500-row CSV with invalid workload_type triggers ValidationError, not InsufficientDataError."""

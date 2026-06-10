@@ -1,6 +1,7 @@
 """
 CETP REST API: prediction, explanation, health-check, and schema endpoints.
 """
+
 from typing import Optional, List, Dict, Any
 import json
 from pathlib import Path
@@ -37,6 +38,7 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 # ---------------------------------------------------------------------------
 # Pydantic models
 # ---------------------------------------------------------------------------
+
 
 class PredictRequest(BaseModel):
     workload_type: str = Field(..., description="Workload class: ML, DB, or WEB")
@@ -115,6 +117,7 @@ class ErrorResponse(BaseModel):
 # Helper functions
 # ---------------------------------------------------------------------------
 
+
 def load_sla_config(custom_config: Optional[dict] = None) -> dict:
     """
     Load SLA config with priority:
@@ -187,6 +190,7 @@ def compute_derived_features(request_data: dict) -> dict:
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @app.get("/health", response_model=HealthResponse, tags=["System"])
 async def health():
     """
@@ -232,9 +236,7 @@ async def predict(request: PredictRequest):
     try:
         from cetp.predictor import CETPPredictor
 
-        feature_dict = compute_derived_features(
-            request.model_dump(exclude={"sla_config"})
-        )
+        feature_dict = compute_derived_features(request.model_dump(exclude={"sla_config"}))
         sla_conf = load_sla_config(request.sla_config)
 
         predictor = CETPPredictor()
@@ -248,9 +250,7 @@ async def predict(request: PredictRequest):
             SHAPFeature(
                 feature=item["feature"],
                 shap_value=item["shap_value"],
-                direction=(
-                    "increases_runtime" if item["shap_value"] > 0 else "decreases_runtime"
-                ),
+                direction=("increases_runtime" if item["shap_value"] > 0 else "decreases_runtime"),
             )
             for item in shap_result[:3]
         ]
@@ -317,9 +317,7 @@ async def explain(request: ExplainRequest):
     try:
         from cetp.predictor import CETPPredictor
 
-        feature_dict = compute_derived_features(
-            request.model_dump(exclude={"sla_config"})
-        )
+        feature_dict = compute_derived_features(request.model_dump(exclude={"sla_config"}))
 
         predictor = CETPPredictor()
         result = predictor.predict(feature_dict)
@@ -382,6 +380,7 @@ async def schema():
 # ---------------------------------------------------------------------------
 # Exception handlers
 # ---------------------------------------------------------------------------
+
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):

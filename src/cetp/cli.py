@@ -2,6 +2,7 @@
 CETP command-line interface.
 Entry point: cetp (configured in pyproject.toml [project.scripts]).
 """
+
 from typing import Optional
 import json
 import sys
@@ -34,9 +35,15 @@ def main() -> None:
 # cetp profile
 # ---------------------------------------------------------------------------
 
+
 @main.command("profile")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output as JSON instead of formatted table.")
+@click.option(
+    "--json",
+    "output_json",
+    is_flag=True,
+    default=False,
+    help="Output as JSON instead of formatted table.",
+)
 def profile(output_json: bool) -> None:
     """Display current machine hardware specifications.
 
@@ -70,9 +77,11 @@ def profile(output_json: bool) -> None:
 # cetp validate
 # ---------------------------------------------------------------------------
 
+
 @main.command("validate")
-@click.option("--data", "data_path", required=True, type=click.Path(),
-              help="Path to CSV file to validate.")
+@click.option(
+    "--data", "data_path", required=True, type=click.Path(), help="Path to CSV file to validate."
+)
 def validate(data_path: str) -> None:
     """Validate a CSV file against the CETP schema.
 
@@ -113,9 +122,15 @@ def validate(data_path: str) -> None:
 # cetp schema
 # ---------------------------------------------------------------------------
 
+
 @main.command("schema")
-@click.option("--export", "export_path", default=None, type=click.Path(),
-              help="Export blank template CSV to this path.")
+@click.option(
+    "--export",
+    "export_path",
+    default=None,
+    type=click.Path(),
+    help="Export blank template CSV to this path.",
+)
 def schema(export_path: Optional[str]) -> None:
     """Show or export the required CSV schema.
 
@@ -154,6 +169,7 @@ def schema(export_path: Optional[str]) -> None:
 # ---------------------------------------------------------------------------
 # cetp info
 # ---------------------------------------------------------------------------
+
 
 @main.command("info")
 def info() -> None:
@@ -205,38 +221,44 @@ def info() -> None:
     for wt in ("ML", "DB", "WEB"):
         if wt in sla:
             t = sla[wt]
-            click.echo(
-                f"{wt:<4}: warn at {t['warn_at_sec']}s, SLA limit {t['sla_runtime_sec']}s"
-            )
+            click.echo(f"{wt:<4}: warn at {t['warn_at_sec']}s, SLA limit {t['sla_runtime_sec']}s")
 
 
 # ---------------------------------------------------------------------------
 # cetp predict
 # ---------------------------------------------------------------------------
 
+
 @main.command("predict")
-@click.option("--workload-type", required=True, type=click.Choice(["ML", "DB", "WEB"]),
-              help="Workload class: ML, DB, or WEB.")
-@click.option("--workload-name", required=True, type=str,
-              help="Workload name e.g. ml_resnet, tpch_q3.")
-@click.option("--complexity", required=True, type=click.IntRange(1, 5),
-              help="Workload complexity level 1-5.")
-@click.option("--sla", "sla_path", default=None, type=click.Path(),
-              help="Path to SLA config JSON file.")
-@click.option("--cpu-cores", type=int, default=None,
-              help="Override: CPU core count.")
-@click.option("--memory-gb", type=float, default=None,
-              help="Override: total RAM in GB.")
-@click.option("--disk-type", type=click.Choice(["HDD", "SSD", "NVMe"]), default=None,
-              help="Override: disk type (HDD, SSD, NVMe).")
-@click.option("--cpu-pct", type=float, default=None,
-              help="Override: CPU utilisation percentage.")
-@click.option("--mem-used-gb", type=float, default=None,
-              help="Override: used memory in GB.")
-@click.option("--fail-on-red", is_flag=True, default=False,
-              help="Exit with code 1 if SLA flag is RED.")
-@click.option("--json", "output_json", is_flag=True, default=False,
-              help="Output result as JSON.")
+@click.option(
+    "--workload-type",
+    required=True,
+    type=click.Choice(["ML", "DB", "WEB"]),
+    help="Workload class: ML, DB, or WEB.",
+)
+@click.option(
+    "--workload-name", required=True, type=str, help="Workload name e.g. ml_resnet, tpch_q3."
+)
+@click.option(
+    "--complexity", required=True, type=click.IntRange(1, 5), help="Workload complexity level 1-5."
+)
+@click.option(
+    "--sla", "sla_path", default=None, type=click.Path(), help="Path to SLA config JSON file."
+)
+@click.option("--cpu-cores", type=int, default=None, help="Override: CPU core count.")
+@click.option("--memory-gb", type=float, default=None, help="Override: total RAM in GB.")
+@click.option(
+    "--disk-type",
+    type=click.Choice(["HDD", "SSD", "NVMe"]),
+    default=None,
+    help="Override: disk type (HDD, SSD, NVMe).",
+)
+@click.option("--cpu-pct", type=float, default=None, help="Override: CPU utilisation percentage.")
+@click.option("--mem-used-gb", type=float, default=None, help="Override: used memory in GB.")
+@click.option(
+    "--fail-on-red", is_flag=True, default=False, help="Exit with code 1 if SLA flag is RED."
+)
+@click.option("--json", "output_json", is_flag=True, default=False, help="Output result as JSON.")
 def predict(
     workload_type: str,
     workload_name: str,
@@ -283,9 +305,7 @@ def predict(
             _disk_map.get(disk_type, 2) if disk_type is not None else hw["disk_speed_class"]
         ),
         "cpu_avg_pct": cpu_pct if cpu_pct is not None else 50.0,
-        "memory_avg_gb": (
-            mem_used_gb if mem_used_gb is not None else hw["memory_total_gb"] * 0.5
-        ),
+        "memory_avg_gb": (mem_used_gb if mem_used_gb is not None else hw["memory_total_gb"] * 0.5),
     }
 
     try:
@@ -320,13 +340,21 @@ def predict(
 # cetp train
 # ---------------------------------------------------------------------------
 
+
 @main.command("train")
-@click.option("--data", "data_path", required=True, type=click.Path(),
-              help="Path to company CSV file.")
-@click.option("--sla", "sla_path", default=None, type=click.Path(),
-              help="Path to company SLA JSON file.")
-@click.option("--output-dir", default=str(Path.home() / ".cetp"), show_default=True,
-              type=click.Path(), help="Directory to save model.")
+@click.option(
+    "--data", "data_path", required=True, type=click.Path(), help="Path to company CSV file."
+)
+@click.option(
+    "--sla", "sla_path", default=None, type=click.Path(), help="Path to company SLA JSON file."
+)
+@click.option(
+    "--output-dir",
+    default=str(Path.home() / ".cetp"),
+    show_default=True,
+    type=click.Path(),
+    help="Directory to save model.",
+)
 def train(data_path: str, sla_path: Optional[str], output_dir: str) -> None:
     """Train a BYOD custom model on company data.
 

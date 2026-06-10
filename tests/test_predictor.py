@@ -1,4 +1,5 @@
 """Unit tests for cetp.predictor (structural tests — no model artefact required)."""
+
 import pytest
 
 from cetp.predictor import CETPPredictor, SLA_FLAGS
@@ -7,6 +8,7 @@ from cetp.predictor import CETPPredictor, SLA_FLAGS
 # ---------------------------------------------------------------------------
 # Instantiation
 # ---------------------------------------------------------------------------
+
 
 class TestCETPPredictorInstantiation:
     def test_instantiation_succeeds_without_model_file(self):
@@ -17,9 +19,7 @@ class TestCETPPredictorInstantiation:
     def test_instantiation_with_custom_sla_path(self, tmp_path):
         """CETPPredictor accepts a custom sla_config_path without raising."""
         sla_file = tmp_path / "custom_sla.json"
-        sla_file.write_text(
-            '{"ML": {"sla_runtime_sec": 30.0, "warn_at_sec": 20.0}}'
-        )
+        sla_file.write_text('{"ML": {"sla_runtime_sec": 30.0, "warn_at_sec": 20.0}}')
         predictor = CETPPredictor(sla_config_path=str(sla_file))
         assert predictor is not None
 
@@ -32,6 +32,7 @@ class TestCETPPredictorInstantiation:
 # ---------------------------------------------------------------------------
 # load_model
 # ---------------------------------------------------------------------------
+
 
 class TestLoadModel:
     def test_raises_file_not_found_when_no_model_exists(self, tmp_path, monkeypatch):
@@ -58,12 +59,19 @@ class TestLoadModel:
 # get_active_model_info
 # ---------------------------------------------------------------------------
 
+
 class TestGetActiveModelInfo:
     def test_returns_dict_with_expected_keys(self):
         """get_active_model_info() must return all required keys without a loaded model."""
         predictor = CETPPredictor()
         info = predictor.get_active_model_info()
-        required_keys = {"model_path", "model_version", "trained_on", "feature_count", "custom_model"}
+        required_keys = {
+            "model_path",
+            "model_version",
+            "trained_on",
+            "feature_count",
+            "custom_model",
+        }
         assert required_keys.issubset(set(info.keys())), (
             f"Missing keys: {required_keys - set(info.keys())}"
         )
@@ -90,6 +98,7 @@ class TestGetActiveModelInfo:
 # ---------------------------------------------------------------------------
 # SLA_FLAGS constant
 # ---------------------------------------------------------------------------
+
 
 class TestSLAFlags:
     def test_sla_flags_contains_expected_values(self):
