@@ -1,4 +1,5 @@
 """Unit tests for cetp.profiler — Phase 2 comprehensive test suite."""
+
 import time
 from unittest.mock import MagicMock, mock_open, patch
 
@@ -14,6 +15,7 @@ def _reset_cache():
 # ---------------------------------------------------------------------------
 # detect_disk_type
 # ---------------------------------------------------------------------------
+
 
 class TestDetectDiskType:
     def setup_method(self):
@@ -81,6 +83,7 @@ class TestDetectDiskType:
 # get_disk_speed_class
 # ---------------------------------------------------------------------------
 
+
 class TestGetDiskSpeedClass:
     def test_disk_speed_class_hdd(self):
         """HDD maps to speed class 1."""
@@ -105,6 +108,7 @@ class TestGetDiskSpeedClass:
 # get_static_profile
 # ---------------------------------------------------------------------------
 
+
 class TestGetStaticProfile:
     def setup_method(self):
         _reset_cache()
@@ -120,8 +124,14 @@ class TestGetStaticProfile:
             patch("socket.gethostname", return_value="test-host"),
         ):
             result = profiler.get_static_profile()
-        expected = {"cpu_cores", "memory_total_gb", "disk_type", "disk_speed_class",
-                    "platform", "hostname"}
+        expected = {
+            "cpu_cores",
+            "memory_total_gb",
+            "disk_type",
+            "disk_speed_class",
+            "platform",
+            "hostname",
+        }
         assert expected == set(result.keys())
 
     def test_static_profile_memory_conversion(self):
@@ -142,6 +152,7 @@ class TestGetStaticProfile:
 # take_snapshot
 # ---------------------------------------------------------------------------
 
+
 class TestTakeSnapshot:
     def setup_method(self):
         _reset_cache()
@@ -160,8 +171,15 @@ class TestTakeSnapshot:
             patch("sys.platform", "darwin"),
         ):
             snap = profiler.take_snapshot()
-        required = {"cpu_cores", "memory_total_gb", "disk_type", "disk_speed_class",
-                    "_time_start", "_disk_read_before", "_disk_write_before"}
+        required = {
+            "cpu_cores",
+            "memory_total_gb",
+            "disk_type",
+            "disk_speed_class",
+            "_time_start",
+            "_disk_read_before",
+            "_disk_write_before",
+        }
         assert required.issubset(set(snap.keys()))
 
     def test_take_snapshot_types(self):
@@ -186,6 +204,7 @@ class TestTakeSnapshot:
 # ---------------------------------------------------------------------------
 # take_end_snapshot
 # ---------------------------------------------------------------------------
+
 
 class TestTakeEndSnapshot:
     def test_take_end_snapshot_disk_delta(self):
@@ -224,60 +243,96 @@ class TestTakeEndSnapshot:
 # compute_derived_features
 # ---------------------------------------------------------------------------
 
+
 class TestComputeDerivedFeatures:
     def test_effective_cpu_formula(self):
         """cpu_cores=8, cpu_avg_pct=25.0 → effective_cpu == 6.0."""
         result = profiler.compute_derived_features(
-            cpu_cores=8, cpu_avg_pct=25.0, memory_avg_gb=4.0,
-            memory_total_gb=8.0, disk_read_mb=0.0, disk_write_mb=0.0, runtime_sec=1.0,
+            cpu_cores=8,
+            cpu_avg_pct=25.0,
+            memory_avg_gb=4.0,
+            memory_total_gb=8.0,
+            disk_read_mb=0.0,
+            disk_write_mb=0.0,
+            runtime_sec=1.0,
         )
         assert result["effective_cpu"] == pytest.approx(6.0)
 
     def test_memory_pressure_formula(self):
         """memory_avg_gb=4.0, memory_total_gb=8.0 → memory_pressure == 0.5."""
         result = profiler.compute_derived_features(
-            cpu_cores=4, cpu_avg_pct=0.0, memory_avg_gb=4.0,
-            memory_total_gb=8.0, disk_read_mb=0.0, disk_write_mb=0.0, runtime_sec=1.0,
+            cpu_cores=4,
+            cpu_avg_pct=0.0,
+            memory_avg_gb=4.0,
+            memory_total_gb=8.0,
+            disk_read_mb=0.0,
+            disk_write_mb=0.0,
+            runtime_sec=1.0,
         )
         assert result["memory_pressure"] == pytest.approx(0.5)
 
     def test_memory_pressure_clamped(self):
         """memory_avg_gb > memory_total_gb (noise) → memory_pressure clamped to 1.0."""
         result = profiler.compute_derived_features(
-            cpu_cores=4, cpu_avg_pct=0.0, memory_avg_gb=9.0,
-            memory_total_gb=8.0, disk_read_mb=0.0, disk_write_mb=0.0, runtime_sec=1.0,
+            cpu_cores=4,
+            cpu_avg_pct=0.0,
+            memory_avg_gb=9.0,
+            memory_total_gb=8.0,
+            disk_read_mb=0.0,
+            disk_write_mb=0.0,
+            runtime_sec=1.0,
         )
         assert result["memory_pressure"] == pytest.approx(1.0)
 
     def test_io_intensity_formula(self):
         """(disk_read_mb=100 + disk_write_mb=50) / runtime_sec=10 == 15.0."""
         result = profiler.compute_derived_features(
-            cpu_cores=4, cpu_avg_pct=0.0, memory_avg_gb=2.0,
-            memory_total_gb=8.0, disk_read_mb=100.0, disk_write_mb=50.0, runtime_sec=10.0,
+            cpu_cores=4,
+            cpu_avg_pct=0.0,
+            memory_avg_gb=2.0,
+            memory_total_gb=8.0,
+            disk_read_mb=100.0,
+            disk_write_mb=50.0,
+            runtime_sec=10.0,
         )
         assert result["io_intensity"] == pytest.approx(15.0)
 
     def test_io_intensity_zero_runtime(self):
         """runtime_sec=0 → io_intensity == 0.0, no ZeroDivisionError."""
         result = profiler.compute_derived_features(
-            cpu_cores=4, cpu_avg_pct=0.0, memory_avg_gb=2.0,
-            memory_total_gb=8.0, disk_read_mb=100.0, disk_write_mb=50.0, runtime_sec=0.0,
+            cpu_cores=4,
+            cpu_avg_pct=0.0,
+            memory_avg_gb=2.0,
+            memory_total_gb=8.0,
+            disk_read_mb=100.0,
+            disk_write_mb=50.0,
+            runtime_sec=0.0,
         )
         assert result["io_intensity"] == 0.0
 
     def test_zero_memory_total_does_not_raise(self):
         """memory_pressure should be 0 when memory_total_gb == 0."""
         result = profiler.compute_derived_features(
-            cpu_cores=4, cpu_avg_pct=50.0, memory_avg_gb=0.0,
-            memory_total_gb=0.0, disk_read_mb=0.0, disk_write_mb=0.0, runtime_sec=1.0,
+            cpu_cores=4,
+            cpu_avg_pct=50.0,
+            memory_avg_gb=0.0,
+            memory_total_gb=0.0,
+            disk_read_mb=0.0,
+            disk_write_mb=0.0,
+            runtime_sec=1.0,
         )
         assert result["memory_pressure"] == pytest.approx(0.0)
 
     def test_returns_all_keys(self):
         """compute_derived_features returns exactly effective_cpu, memory_pressure, io_intensity."""
         result = profiler.compute_derived_features(
-            cpu_cores=4, cpu_avg_pct=50.0, memory_avg_gb=4.0,
-            memory_total_gb=16.0, disk_read_mb=10.0, disk_write_mb=5.0, runtime_sec=5.0,
+            cpu_cores=4,
+            cpu_avg_pct=50.0,
+            memory_avg_gb=4.0,
+            memory_total_gb=16.0,
+            disk_read_mb=10.0,
+            disk_write_mb=5.0,
+            runtime_sec=5.0,
         )
         assert set(result.keys()) == {"effective_cpu", "memory_pressure", "io_intensity"}
 
@@ -285,6 +340,7 @@ class TestComputeDerivedFeatures:
 # ---------------------------------------------------------------------------
 # RuntimeSampler
 # ---------------------------------------------------------------------------
+
 
 class TestRuntimeSampler:
     def test_sampler_collects_samples(self):
@@ -302,7 +358,11 @@ class TestRuntimeSampler:
         time.sleep(0.15)
         sampler.stop()
         assert set(sampler.get_averages().keys()) == {
-            "cpu_avg_pct", "memory_avg_gb", "cpu_peak_pct", "memory_peak_gb", "sample_count"
+            "cpu_avg_pct",
+            "memory_avg_gb",
+            "cpu_peak_pct",
+            "memory_peak_gb",
+            "sample_count",
         }
 
     def test_sampler_double_start_raises(self):
@@ -367,11 +427,25 @@ class TestRuntimeSampler:
 # ---------------------------------------------------------------------------
 
 _EXPECTED_FEATURE_ROW_KEYS = {
-    "run_id", "batch_id", "workload_type", "workload_name", "workload_complexity",
-    "cpu_cores", "memory_total_gb", "cpu_avg_pct", "cpu_peak_pct",
-    "effective_cpu", "memory_avg_gb", "memory_peak_gb", "memory_pressure",
-    "disk_read_mb", "disk_write_mb", "io_intensity",
-    "disk_type", "disk_speed_class", "runtime_sec",
+    "run_id",
+    "batch_id",
+    "workload_type",
+    "workload_name",
+    "workload_complexity",
+    "cpu_cores",
+    "memory_total_gb",
+    "cpu_avg_pct",
+    "cpu_peak_pct",
+    "effective_cpu",
+    "memory_avg_gb",
+    "memory_peak_gb",
+    "memory_pressure",
+    "disk_read_mb",
+    "disk_write_mb",
+    "io_intensity",
+    "disk_type",
+    "disk_speed_class",
+    "runtime_sec",
 }
 
 

@@ -1,4 +1,5 @@
 """Comprehensive tests for the CETP FastAPI REST backend (Phase 7)."""
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -10,6 +11,7 @@ client = TestClient(app)
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def valid_predict_payload():
@@ -31,6 +33,7 @@ def valid_predict_payload():
 # ---------------------------------------------------------------------------
 # Health endpoint
 # ---------------------------------------------------------------------------
+
 
 class TestHealth:
     def test_health_returns_200(self):
@@ -68,6 +71,7 @@ class TestHealth:
 # Schema endpoint
 # ---------------------------------------------------------------------------
 
+
 class TestSchema:
     def test_schema_returns_200(self):
         response = client.get("/schema")
@@ -91,6 +95,7 @@ class TestSchema:
 # Profile endpoint
 # ---------------------------------------------------------------------------
 
+
 class TestProfile:
     def test_profile_returns_200(self):
         response = client.get("/predict/profile")
@@ -112,6 +117,7 @@ class TestProfile:
 # ---------------------------------------------------------------------------
 # Predict endpoint — validation
 # ---------------------------------------------------------------------------
+
 
 class TestPredictValidation:
     def test_predict_missing_workload_type(self, valid_predict_payload):
@@ -164,6 +170,7 @@ class TestPredictValidation:
 # Predict endpoint — model not available
 # ---------------------------------------------------------------------------
 
+
 class TestPredictNoModel:
     def test_predict_no_model_returns_503(self, valid_predict_payload):
         response = client.post("/predict", json=valid_predict_payload)
@@ -183,6 +190,7 @@ class TestPredictNoModel:
 # ---------------------------------------------------------------------------
 # Predict endpoint — valid request structure
 # ---------------------------------------------------------------------------
+
 
 class TestPredictValidPayload:
     def test_predict_valid_payload_accepted(self, valid_predict_payload):
@@ -209,6 +217,7 @@ class TestPredictValidPayload:
 # Explain endpoint
 # ---------------------------------------------------------------------------
 
+
 class TestExplain:
     def test_explain_no_model_returns_503(self, valid_predict_payload):
         response = client.post("/explain", json=valid_predict_payload)
@@ -226,6 +235,7 @@ class TestExplain:
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
+
 
 class TestErrorHandling:
     def test_404_returns_json(self):
@@ -249,6 +259,7 @@ class TestErrorHandling:
 # ---------------------------------------------------------------------------
 # compute_derived_features unit tests
 # ---------------------------------------------------------------------------
+
 
 class TestComputeDerivedFeatures:
     def _base(self):

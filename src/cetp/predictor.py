@@ -3,6 +3,7 @@ Prediction engine: loads the trained model artefact and produces
 runtime estimates with confidence intervals, SLA flags, and
 SHAP-based explanations.
 """
+
 import json
 import os
 from pathlib import Path
@@ -167,7 +168,9 @@ class CETPPredictor:
         #       Return self._model_metadata enriched with path and custom_model flag.
         custom_model_path = CETP_DIR / "model.pkl"
         return {
-            "model_path": str(custom_model_path) if custom_model_path.exists() else str(BASE_MODEL_PATH),
+            "model_path": str(custom_model_path)
+            if custom_model_path.exists()
+            else str(BASE_MODEL_PATH),
             "model_version": self._model_metadata.get("version", "unknown"),
             "trained_on": self._model_metadata.get("trained_on", "unknown"),
             "feature_count": self._model_metadata.get("feature_count", 0),

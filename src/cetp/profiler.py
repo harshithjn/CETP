@@ -3,6 +3,7 @@ System profiler: collects hardware and runtime metrics from the
 local machine using psutil. Produces the feature vector used by
 the prediction engine.
 """
+
 from typing import Optional
 import logging
 import os

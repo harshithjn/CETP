@@ -2,22 +2,44 @@
 Schema validator: validates company-supplied CSV files against the
 CETP dataset schema before BYOD training is permitted.
 """
+
 import csv
 import os
 from pathlib import Path
 from typing import Optional  # noqa: F401 — required for Python 3.9 compat (no X | Y syntax)
 
 REQUIRED_COLUMNS = [
-    "run_id", "workload_type", "workload_name", "workload_complexity",
-    "cpu_cores", "memory_total_gb", "cpu_avg_pct", "effective_cpu",
-    "memory_avg_gb", "memory_pressure", "disk_read_mb", "disk_write_mb",
-    "io_intensity", "disk_type", "disk_speed_class", "runtime_sec",
+    "run_id",
+    "workload_type",
+    "workload_name",
+    "workload_complexity",
+    "cpu_cores",
+    "memory_total_gb",
+    "cpu_avg_pct",
+    "effective_cpu",
+    "memory_avg_gb",
+    "memory_pressure",
+    "disk_read_mb",
+    "disk_write_mb",
+    "io_intensity",
+    "disk_type",
+    "disk_speed_class",
+    "runtime_sec",
 ]
 
 NUMERIC_COLUMNS = [
-    "workload_complexity", "cpu_cores", "memory_total_gb", "cpu_avg_pct",
-    "effective_cpu", "memory_avg_gb", "memory_pressure", "disk_read_mb",
-    "disk_write_mb", "io_intensity", "disk_speed_class", "runtime_sec",
+    "workload_complexity",
+    "cpu_cores",
+    "memory_total_gb",
+    "cpu_avg_pct",
+    "effective_cpu",
+    "memory_avg_gb",
+    "memory_pressure",
+    "disk_read_mb",
+    "disk_write_mb",
+    "io_intensity",
+    "disk_speed_class",
+    "runtime_sec",
 ]
 
 VALID_WORKLOAD_TYPES = {"ML", "DB", "WEB"}
@@ -47,6 +69,7 @@ class InsufficientDataError(ValidationError):
     Raised specifically when row count is below MIN_ROW_COUNT.
     Subclass of ValidationError so callers can catch either.
     """
+
     pass
 
 
@@ -78,10 +101,9 @@ def validate_csv(filepath: str) -> dict:
     row_count = len(rows)
 
     if row_count < MIN_ROW_COUNT:
-        raise InsufficientDataError([
-            f"Insufficient data: {row_count} rows found, "
-            f"minimum required is {MIN_ROW_COUNT}"
-        ])
+        raise InsufficientDataError(
+            [f"Insufficient data: {row_count} rows found, minimum required is {MIN_ROW_COUNT}"]
+        )
 
     runtime_values: list = []
     workload_type_counts: dict = {}
@@ -103,31 +125,23 @@ def validate_csv(filepath: str) -> dict:
             try:
                 fval = float(val)
             except ValueError:
-                violations.append(
-                    f"Row {i}: non-numeric value '{val}' in column '{col}'"
-                )
+                violations.append(f"Row {i}: non-numeric value '{val}' in column '{col}'")
                 row_ok = False
                 continue
 
             if col == "runtime_sec":
                 if fval <= 0:
-                    violations.append(
-                        f"Row {i}: runtime_sec must be > 0, got {fval}"
-                    )
+                    violations.append(f"Row {i}: runtime_sec must be > 0, got {fval}")
                     row_ok = False
 
             elif col == "memory_pressure":
                 if not (0.0 <= fval <= 1.0):
-                    violations.append(
-                        f"Row {i}: memory_pressure must be in [0.0, 1.0], got {fval}"
-                    )
+                    violations.append(f"Row {i}: memory_pressure must be in [0.0, 1.0], got {fval}")
                     row_ok = False
 
             elif col == "cpu_avg_pct":
                 if not (0.0 <= fval <= 100.0):
-                    violations.append(
-                        f"Row {i}: cpu_avg_pct must be in [0.0, 100.0], got {fval}"
-                    )
+                    violations.append(f"Row {i}: cpu_avg_pct must be in [0.0, 100.0], got {fval}")
                     row_ok = False
 
             elif col == "workload_complexity":
@@ -141,9 +155,7 @@ def validate_csv(filepath: str) -> dict:
             elif col == "cpu_cores":
                 int_val = int(fval)
                 if float(int_val) != fval or int_val <= 0:
-                    violations.append(
-                        f"Row {i}: cpu_cores must be a positive integer, got {val}"
-                    )
+                    violations.append(f"Row {i}: cpu_cores must be a positive integer, got {val}")
                     row_ok = False
 
             elif col == "disk_speed_class":
@@ -165,8 +177,7 @@ def validate_csv(filepath: str) -> dict:
         dt = row.get("disk_type", "").strip()
         if dt not in VALID_DISK_TYPES:
             violations.append(
-                f"Row {i}: invalid disk_type '{dt}', "
-                f"must be one of {sorted(VALID_DISK_TYPES)}"
+                f"Row {i}: invalid disk_type '{dt}', must be one of {sorted(VALID_DISK_TYPES)}"
             )
             row_ok = False
 
