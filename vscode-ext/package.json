@@ -1,0 +1,123 @@
+{
+  "name": "cetp",
+  "displayName": "CETP — Runtime Prediction",
+  "description": "Predict production runtime and SLA status before you deploy. Powered by Cross-Environment Execution Time Prediction.",
+  "version": "0.1.0",
+  "publisher": "cetp-team",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other",
+    "Testing"
+  ],
+  "keywords": [
+    "runtime prediction",
+    "SLA",
+    "performance",
+    "deployment",
+    "machine learning"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "cetp.predictRuntime",
+        "title": "CETP: Predict Runtime"
+      },
+      {
+        "command": "cetp.showProfile",
+        "title": "CETP: Show Machine Profile"
+      },
+      {
+        "command": "cetp.showInfo",
+        "title": "CETP: Show Info"
+      },
+      {
+        "command": "cetp.openSettings",
+        "title": "CETP: Open Settings"
+      }
+    ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "cetp.predictRuntime",
+          "when": "resourceExtname == .py || resourceExtname == .java || resourceExtname == .cpp",
+          "group": "cetp@1"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "cetp.predictRuntime",
+          "when": "resourceExtname == .py || resourceExtname == .java || resourceExtname == .cpp",
+          "group": "cetp@1"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "CETP",
+      "properties": {
+        "cetp.apiEndpoint": {
+          "type": "string",
+          "default": "http://localhost:8000",
+          "description": "CETP API server endpoint. Leave as localhost to use local CLI mode."
+        },
+        "cetp.useLocalCli": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use local cetp CLI instead of API server. Recommended for most users."
+        },
+        "cetp.defaultWorkloadType": {
+          "type": "string",
+          "default": "ML",
+          "enum": ["ML", "DB", "WEB"],
+          "description": "Default workload type for predictions."
+        },
+        "cetp.defaultComplexity": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 5,
+          "description": "Default workload complexity level (1-5)."
+        },
+        "cetp.slaFilePath": {
+          "type": "string",
+          "default": "",
+          "description": "Path to custom sla.json file. Leave empty to use defaults."
+        }
+      }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "cetp-sidebar",
+          "title": "CETP Predictions",
+          "icon": "$(pulse)"
+        }
+      ]
+    },
+    "views": {
+      "cetp-sidebar": [
+        {
+          "type": "webview",
+          "id": "cetp.predictionPanel",
+          "name": "Prediction Results"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^2.24.0",
+    "typescript": "^5.3.0"
+  }
+}
