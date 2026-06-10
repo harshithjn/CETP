@@ -3,6 +3,7 @@ System profiler: collects hardware and runtime metrics from the
 local machine using psutil. Produces the feature vector used by
 the prediction engine.
 """
+from typing import Optional
 import logging
 import os
 import re
@@ -15,7 +16,7 @@ import psutil
 
 logger = logging.getLogger(__name__)
 
-DISK_TYPE_CACHE: str | None = None
+DISK_TYPE_CACHE: Optional[str] = None
 
 
 def detect_disk_type() -> str:
