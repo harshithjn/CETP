@@ -9,8 +9,7 @@ from cetp.validator import (
     MIN_ROW_COUNT,
     NUMERIC_COLUMNS,
     REQUIRED_COLUMNS,
-    VALID_DISK_TYPES,
-    VALID_WORKLOAD_TYPES,
+    VALID_MODELS,
     InsufficientDataError,
     ValidationError,
     export_schema_template,
@@ -24,7 +23,7 @@ from cetp.validator import (
 # ---------------------------------------------------------------------------
 
 
-def make_csv(tmp_path, rows: int = 600, overrides: Optional[dict] = None) -> str:
+def make_csv(tmp_path, rows: int = 120, overrides: Optional[dict] = None) -> str:
     """
     Creates a valid CSV file with `rows` rows at tmp_path/test.csv.
     overrides: dict mapping column name to a list of values (applied to rows
@@ -34,47 +33,24 @@ def make_csv(tmp_path, rows: int = 600, overrides: Optional[dict] = None) -> str
     if overrides is None:
         overrides = {}
 
-    workload_types = ["ML", "DB", "WEB"]
-    workload_names = ["ml_resnet", "tpch_q3", "wrk_low"]
+    models = ["resnet18", "resnet50", "mobilenet", "distilbert"]
     complexities = [1, 2, 3, 4, 5]
-    cpu_cores_list = [2, 4, 8, 16]
-    memory_total_list = [4, 8, 16, 32]
-    disk_types = ["HDD", "SSD", "NVMe"]
-    disk_speed_classes = [1, 2, 3]
+    cpu_count_list = [2, 3, 4]
+    total_memory_list = [3911.8, 8192.0, 15785.3]
+    batch_size_list = [8, 16, 32, 64, 128]
+    num_iterations_list = [19, 250, 500, 973]
 
-    cpu_avg_pct = 45.0
-    memory_avg_gb = 4.0
-    disk_read_mb = 120.5
-    disk_write_mb = 34.2
     runtime_sec = 14.37
 
     data_rows = []
     for i in range(rows):
-        cpu_cores = cpu_cores_list[i % len(cpu_cores_list)]
-        memory_total_gb = memory_total_list[i % len(memory_total_list)]
-        disk_type = disk_types[i % len(disk_types)]
-        disk_speed_class = disk_speed_classes[i % len(disk_speed_classes)]
-
-        effective_cpu = cpu_cores * (cpu_avg_pct / 100.0)
-        memory_pressure = memory_avg_gb / memory_total_gb
-        io_intensity = (disk_read_mb + disk_write_mb) / runtime_sec
-
         row = {
-            "run_id": str(i),
-            "workload_type": workload_types[i % len(workload_types)],
-            "workload_name": workload_names[i % len(workload_names)],
-            "workload_complexity": str(complexities[i % len(complexities)]),
-            "cpu_cores": str(cpu_cores),
-            "memory_total_gb": str(float(memory_total_gb)),
-            "cpu_avg_pct": str(cpu_avg_pct),
-            "effective_cpu": f"{effective_cpu:.3f}",
-            "memory_avg_gb": str(memory_avg_gb),
-            "memory_pressure": f"{memory_pressure:.4f}",
-            "disk_read_mb": str(disk_read_mb),
-            "disk_write_mb": str(disk_write_mb),
-            "io_intensity": f"{io_intensity:.4f}",
-            "disk_type": disk_type,
-            "disk_speed_class": str(disk_speed_class),
+            "cpu_count": str(cpu_count_list[i % len(cpu_count_list)]),
+            "total_memory_mb": str(total_memory_list[i % len(total_memory_list)]),
+            "model": models[i % len(models)],
+            "complexity_level": str(complexities[i % len(complexities)]),
+            "batch_size": str(batch_size_list[i % len(batch_size_list)]),
+            "num_iterations": str(num_iterations_list[i % len(num_iterations_list)]),
             "runtime_sec": str(runtime_sec),
         }
         data_rows.append(row)
@@ -109,7 +85,7 @@ class TestFileLevelBehavior:
             validate_csv(str(tmp_path / "nonexistent.csv"))
 
     def test_valid_csv_returns_dict(self, tmp_path):
-        """A valid 600-row CSV returns a dict with valid=True and no violations."""
+        """A valid 120-row CSV returns a dict with valid=True and no violations."""
         path = make_csv(tmp_path)
         result = validate_csv(path)
         assert result["valid"] is True
@@ -117,9 +93,9 @@ class TestFileLevelBehavior:
 
     def test_valid_csv_row_count(self, tmp_path):
         """Returned dict contains the exact number of data rows."""
-        path = make_csv(tmp_path, rows=700)
+        path = make_csv(tmp_path, rows=150)
         result = validate_csv(path)
-        assert result["row_count"] == 700
+        assert result["row_count"] == 150
 
     def test_valid_csv_has_runtime_stats(self, tmp_path):
         """Returned dict includes runtime_stats with min, max, mean keys."""
@@ -131,13 +107,13 @@ class TestFileLevelBehavior:
         assert "max" in stats
         assert "mean" in stats
 
-    def test_valid_csv_has_workload_counts(self, tmp_path):
-        """Returned dict includes workload_type_counts covering all valid types."""
+    def test_valid_csv_has_model_counts(self, tmp_path):
+        """Returned dict includes model_counts covering all valid models."""
         path = make_csv(tmp_path)
         result = validate_csv(path)
-        counts = result["workload_type_counts"]
-        for wt in VALID_WORKLOAD_TYPES:
-            assert wt in counts
+        counts = result["model_counts"]
+        for m in VALID_MODELS:
+            assert m in counts
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +129,7 @@ class TestColumnValidation:
         with open(path, "w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=cols)
             writer.writeheader()
-            writer.writerows([{c: "1" for c in cols} for _ in range(600)])
+            writer.writerows([{c: "1" for c in cols} for _ in range(120)])
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
         joined = " ".join(exc_info.value.violations)
@@ -161,13 +137,13 @@ class TestColumnValidation:
 
     def test_missing_multiple_columns(self, tmp_path):
         """CSV missing 3 required columns raises ValidationError listing all 3."""
-        missing = ["runtime_sec", "cpu_cores", "memory_pressure"]
+        missing = ["runtime_sec", "cpu_count", "batch_size"]
         cols = [c for c in REQUIRED_COLUMNS if c not in missing]
         path = str(tmp_path / "missing3.csv")
         with open(path, "w", newline="", encoding="utf-8") as fh:
             writer = csv.DictWriter(fh, fieldnames=cols)
             writer.writeheader()
-            writer.writerows([{c: "1" for c in cols} for _ in range(600)])
+            writer.writerows([{c: "1" for c in cols} for _ in range(120)])
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
         joined = " ".join(exc_info.value.violations)
@@ -204,7 +180,7 @@ class TestRowCountValidation:
         with pytest.raises(InsufficientDataError):
             validate_csv(path)
 
-    def test_exactly_500_rows_passes(self, tmp_path):
+    def test_exactly_100_rows_passes(self, tmp_path):
         """Exactly MIN_ROW_COUNT rows is the minimum accepted."""
         path = make_csv(tmp_path, rows=MIN_ROW_COUNT)
         result = validate_csv(path)
@@ -246,121 +222,73 @@ class TestRuntimeSec:
 
 
 # ---------------------------------------------------------------------------
-# memory_pressure tests
+# total_memory_mb tests
 # ---------------------------------------------------------------------------
 
 
-class TestMemoryPressure:
-    def test_memory_pressure_above_one_raises(self, tmp_path):
-        """memory_pressure=1.5 exceeds [0.0, 1.0] and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"memory_pressure": ["1.5"]})
+class TestTotalMemoryMb:
+    def test_negative_total_memory_raises(self, tmp_path):
+        """total_memory_mb=-100.0 is not positive and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"total_memory_mb": ["-100.0"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("memory_pressure" in v for v in exc_info.value.violations)
+        assert any("total_memory_mb" in v for v in exc_info.value.violations)
 
-    def test_memory_pressure_below_zero_raises(self, tmp_path):
-        """memory_pressure=-0.1 is below [0.0, 1.0] and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"memory_pressure": ["-0.1"]})
+    def test_zero_total_memory_raises(self, tmp_path):
+        """total_memory_mb=0.0 is not positive and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"total_memory_mb": ["0.0"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("memory_pressure" in v for v in exc_info.value.violations)
+        assert any("total_memory_mb" in v for v in exc_info.value.violations)
 
-    def test_memory_pressure_exactly_one_passes(self, tmp_path):
-        """memory_pressure=1.0 is at the upper boundary and must pass."""
-        path = make_csv(tmp_path, overrides={"memory_pressure": "1.0"})
-        result = validate_csv(path)
-        assert result["valid"] is True
-
-    def test_memory_pressure_zero_passes(self, tmp_path):
-        """memory_pressure=0.0 is at the lower boundary and must pass."""
-        path = make_csv(tmp_path, overrides={"memory_pressure": "0.0"})
+    def test_valid_total_memory_passes(self, tmp_path):
+        """total_memory_mb=15785.3 is a positive float and must pass."""
+        path = make_csv(tmp_path, overrides={"total_memory_mb": "15785.3"})
         result = validate_csv(path)
         assert result["valid"] is True
 
 
 # ---------------------------------------------------------------------------
-# workload_type tests
+# model tests
 # ---------------------------------------------------------------------------
 
 
-class TestWorkloadType:
-    def test_invalid_workload_type_raises(self, tmp_path):
-        """workload_type='INVALID' is not in VALID_WORKLOAD_TYPES and raises."""
-        assert "INVALID" not in VALID_WORKLOAD_TYPES
-        path = make_csv(tmp_path, overrides={"workload_type": ["INVALID"]})
+class TestModel:
+    def test_invalid_model_raises(self, tmp_path):
+        """model='INVALID' is not in VALID_MODELS and raises ValidationError."""
+        assert "INVALID" not in VALID_MODELS
+        path = make_csv(tmp_path, overrides={"model": ["INVALID"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("workload_type" in v for v in exc_info.value.violations)
+        assert any("model" in v for v in exc_info.value.violations)
 
-    def test_valid_workload_types_pass(self, tmp_path):
-        """All values in VALID_WORKLOAD_TYPES (ML, DB, WEB) pass validation."""
+    def test_valid_models_pass(self, tmp_path):
+        """All values in VALID_MODELS pass validation."""
         path = make_csv(tmp_path)
         result = validate_csv(path)
         assert result["valid"] is True
-        assert set(result["workload_type_counts"].keys()) == VALID_WORKLOAD_TYPES
+        assert set(result["model_counts"].keys()) == VALID_MODELS
 
 
 # ---------------------------------------------------------------------------
-# disk_type tests
+# complexity_level tests
 # ---------------------------------------------------------------------------
 
 
-class TestDiskType:
-    def test_invalid_disk_type_raises(self, tmp_path):
-        """disk_type='OPTANE' is not in VALID_DISK_TYPES and raises ValidationError."""
-        assert "OPTANE" not in VALID_DISK_TYPES
-        path = make_csv(tmp_path, overrides={"disk_type": ["OPTANE"]})
-        with pytest.raises(ValidationError) as exc_info:
-            validate_csv(path)
-        assert any("disk_type" in v for v in exc_info.value.violations)
-
-    def test_valid_disk_types_pass(self, tmp_path):
-        """All values in VALID_DISK_TYPES (HDD, SSD, NVMe) appear and pass."""
-        path = make_csv(tmp_path)
-        result = validate_csv(path)
-        assert result["valid"] is True
-
-
-# ---------------------------------------------------------------------------
-# cpu_avg_pct tests
-# ---------------------------------------------------------------------------
-
-
-class TestCpuAvgPct:
-    def test_cpu_pct_above_100_raises(self, tmp_path):
-        """cpu_avg_pct=101.0 exceeds [0.0, 100.0] and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"cpu_avg_pct": ["101.0"]})
-        with pytest.raises(ValidationError) as exc_info:
-            validate_csv(path)
-        assert any("cpu_avg_pct" in v for v in exc_info.value.violations)
-
-    def test_cpu_pct_negative_raises(self, tmp_path):
-        """cpu_avg_pct=-5.0 is below [0.0, 100.0] and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"cpu_avg_pct": ["-5.0"]})
-        with pytest.raises(ValidationError) as exc_info:
-            validate_csv(path)
-        assert any("cpu_avg_pct" in v for v in exc_info.value.violations)
-
-
-# ---------------------------------------------------------------------------
-# workload_complexity tests
-# ---------------------------------------------------------------------------
-
-
-class TestWorkloadComplexity:
+class TestComplexityLevel:
     def test_complexity_out_of_range_raises(self, tmp_path):
-        """workload_complexity=6 exceeds [1, 5] and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"workload_complexity": ["6"]})
+        """complexity_level=6 exceeds [1, 5] and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"complexity_level": ["6"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("workload_complexity" in v for v in exc_info.value.violations)
+        assert any("complexity_level" in v for v in exc_info.value.violations)
 
     def test_complexity_zero_raises(self, tmp_path):
-        """workload_complexity=0 is below [1, 5] and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"workload_complexity": ["0"]})
+        """complexity_level=0 is below [1, 5] and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"complexity_level": ["0"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("workload_complexity" in v for v in exc_info.value.violations)
+        assert any("complexity_level" in v for v in exc_info.value.violations)
 
 
 # ---------------------------------------------------------------------------
@@ -371,11 +299,11 @@ class TestWorkloadComplexity:
 class TestEmptyValues:
     def test_empty_numeric_field_raises(self, tmp_path):
         """A row with an empty string in any NUMERIC_COLUMNS field raises ValidationError."""
-        assert "cpu_cores" in NUMERIC_COLUMNS
-        path = make_csv(tmp_path, overrides={"cpu_cores": [""]})
+        assert "cpu_count" in NUMERIC_COLUMNS
+        path = make_csv(tmp_path, overrides={"cpu_count": [""]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("cpu_cores" in v for v in exc_info.value.violations)
+        assert any("cpu_count" in v for v in exc_info.value.violations)
 
 
 # ---------------------------------------------------------------------------
@@ -388,7 +316,7 @@ class TestViolationCollection:
         """All violations from multiple bad rows are collected, not just the first."""
         path = make_csv(
             tmp_path,
-            overrides={"workload_type": ["BAD_1", "BAD_2", "BAD_3"]},
+            overrides={"model": ["BAD_1", "BAD_2", "BAD_3"]},
         )
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
@@ -404,42 +332,49 @@ class TestViolationCollection:
 
 
 # ---------------------------------------------------------------------------
-# Additional constraint tests (cpu_cores, disk_speed_class, non-numeric values)
+# Additional constraint tests (cpu_count, batch_size, num_iterations, non-numeric values)
 # ---------------------------------------------------------------------------
 
 
 class TestAdditionalConstraints:
-    def test_cpu_cores_zero_raises(self, tmp_path):
-        """cpu_cores=0 is not a positive integer and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"cpu_cores": ["0"]})
+    def test_cpu_count_zero_raises(self, tmp_path):
+        """cpu_count=0 is not a positive integer and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"cpu_count": ["0"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("cpu_cores" in v for v in exc_info.value.violations)
+        assert any("cpu_count" in v for v in exc_info.value.violations)
 
-    def test_cpu_cores_negative_raises(self, tmp_path):
-        """cpu_cores=-1 is not a positive integer and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"cpu_cores": ["-1"]})
+    def test_cpu_count_negative_raises(self, tmp_path):
+        """cpu_count=-1 is not a positive integer and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"cpu_count": ["-1"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("cpu_cores" in v for v in exc_info.value.violations)
+        assert any("cpu_count" in v for v in exc_info.value.violations)
 
-    def test_disk_speed_class_invalid_raises(self, tmp_path):
-        """disk_speed_class=4 is not in {1, 2, 3} and raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"disk_speed_class": ["4"]})
+    def test_batch_size_invalid_raises(self, tmp_path):
+        """batch_size=0 is not a positive integer and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"batch_size": ["0"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("disk_speed_class" in v for v in exc_info.value.violations)
+        assert any("batch_size" in v for v in exc_info.value.violations)
+
+    def test_num_iterations_invalid_raises(self, tmp_path):
+        """num_iterations=-1 is not a positive integer and raises ValidationError."""
+        path = make_csv(tmp_path, overrides={"num_iterations": ["-1"]})
+        with pytest.raises(ValidationError) as exc_info:
+            validate_csv(path)
+        assert any("num_iterations" in v for v in exc_info.value.violations)
 
     def test_non_numeric_value_in_numeric_column_raises(self, tmp_path):
         """A non-numeric string in a NUMERIC_COLUMNS field raises ValidationError."""
-        path = make_csv(tmp_path, overrides={"cpu_avg_pct": ["not_a_number"]})
+        path = make_csv(tmp_path, overrides={"cpu_count": ["not_a_number"]})
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
-        assert any("cpu_avg_pct" in v for v in exc_info.value.violations)
+        assert any("cpu_count" in v for v in exc_info.value.violations)
 
     def test_violation_limit_caps_at_50(self, tmp_path):
         """When 50+ rows are bad, collection stops at 50 violations to save memory."""
-        path = make_csv(tmp_path, overrides={"workload_type": ["BAD"] * 55})
+        path = make_csv(tmp_path, overrides={"model": ["BAD"] * 55}, rows=120)
         with pytest.raises(ValidationError) as exc_info:
             validate_csv(path)
         assert len(exc_info.value.violations) == 50
@@ -477,13 +412,13 @@ class TestExportSchemaTemplate:
         assert len(data_rows) == 1
 
     def test_export_example_values(self, tmp_path):
-        """Example row contains workload_type=ML and runtime_sec=14.37."""
+        """Example row contains model=resnet18 and runtime_sec=14.37."""
         out = tmp_path / "template.csv"
         export_schema_template(str(out))
         with open(out, newline="", encoding="utf-8") as fh:
             reader = csv.DictReader(fh)
             row = list(reader)[0]
-        assert row["workload_type"] == "ML"
+        assert row["model"] == "resnet18"
         assert row["runtime_sec"] == "14.37"
 
 
@@ -499,15 +434,14 @@ class TestGetSchemaInfo:
         expected = {
             "required_columns",
             "numeric_columns",
-            "valid_workload_types",
-            "valid_disk_types",
+            "valid_models",
             "min_row_count",
             "column_constraints",
         }
         assert set(info.keys()) == expected
 
     def test_schema_info_min_row_count(self):
-        """get_schema_info reports min_row_count of 500."""
+        """get_schema_info reports min_row_count of 100."""
         info = get_schema_info()
         assert info["min_row_count"] == MIN_ROW_COUNT
-        assert info["min_row_count"] == 500
+        assert info["min_row_count"] == 100

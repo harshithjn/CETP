@@ -152,24 +152,25 @@ After training, all future predictions automatically use the custom model.
 
 ## SLA Configuration
 
-Define SLA thresholds in a JSON configuration file.
+Define SLA thresholds per model in a JSON configuration file, keyed by model name
+(`resnet18`, `resnet50`, `mobilenet`, `distilbert`):
 
 ```json
 {
-  "ML": {
-    "sla_runtime_sec": 20.0,
-    "warn_at_sec": 15.0
-  },
-  "DB": {
-    "sla_runtime_sec": 5.0,
-    "warn_at_sec": 3.5
-  },
-  "WEB": {
-    "sla_runtime_sec": 1.0,
-    "warn_at_sec": 0.7
-  }
+  "resnet18": {"sla_runtime_sec": 393.8, "warn_at_sec": 234.7},
+  "resnet50": {"sla_runtime_sec": 431.9, "warn_at_sec": 237.4},
+  "mobilenet": {"sla_runtime_sec": 587.9, "warn_at_sec": 249.2},
+  "distilbert": {"sla_runtime_sec": 202.9, "warn_at_sec": 183.7}
 }
 ```
+
+The values shipped in `sla_defaults.json` are **starting defaults, not empirically
+optimal thresholds** — but they are grounded in the real combined training
+distribution's per-model runtime percentiles: `warn_at_sec` is the p75 and
+`sla_runtime_sec` is the p90. That means a typical (around-median) prediction
+shows GREEN, a heavier-than-usual one shows YELLOW, and only genuinely unusual,
+slow runs show RED. Every deployment has different latency requirements, so
+override them with your own `sla.json` following the same shape.
 
 Use the configuration during prediction:
 

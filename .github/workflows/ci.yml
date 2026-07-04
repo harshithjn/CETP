@@ -87,18 +87,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
-      - name: Check model artefact status
+      - name: Load model and verify a real prediction
         run: |
           python3 -c "
           from pathlib import Path
+
           model_path = Path('model/artifacts/base_model.pkl')
-          if model_path.exists():
-              print('Model artefact found — running evaluation gate')
-              # evaluation will be added here when model is available
-          else:
+          if not model_path.exists():
               print('No model artefact found — skipping evaluation gate')
-              print('This is expected during development phases 1-9')
               print('Add base_model.pkl to model/artifacts/ to enable this gate')
+              raise SystemExit(0)
+
+          from cetp.predictor import CETPPredictor
+
+          p = CETPPredictor()
+          result = p.predict('resnet18', 3, cpu_count=4, total_memory_mb=8192)
+          assert result['predicted_runtime_sec'] > 0, 'Model produced invalid prediction'
+          assert result['confidence_status'] in ('RELIABLE', 'EXTRAPOLATED')
+          print('Model gate: PASS')
           "
 
   integration-smoke:
@@ -142,21 +148,19 @@ jobs:
         run: |
           cetp schema --export /tmp/template.csv
           python3 -c "
-          import csv, copy
+          import csv
 
           # Read the template
           with open('/tmp/template.csv') as f:
               reader = csv.DictReader(f)
               template_row = next(reader)
 
-          # Write 550 identical rows
+          # Write 150 identical rows (above MIN_ROW_COUNT=100)
           with open('/tmp/test_data.csv', 'w', newline='') as f:
               writer = csv.DictWriter(f, fieldnames=list(template_row.keys()))
               writer.writeheader()
-              for i in range(550):
-                  row = copy.copy(template_row)
-                  row['run_id'] = str(i)
-                  writer.writerow(row)
-          print('Created test CSV with 550 rows')
+              for _ in range(150):
+                  writer.writerow(template_row)
+          print('Created test CSV with 150 rows')
           "
           cetp validate --data /tmp/test_data.csv
