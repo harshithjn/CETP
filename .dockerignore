@@ -24,9 +24,8 @@ htmlcov/
 coverage.xml
 *.cover
 
-# Model artifacts — mounted at runtime, not baked into image
-model/artifacts/*.pkl
-model/artifacts/*.json
+# Model artifacts are now baked into the image at build time (see Dockerfile);
+# do not re-add exclusions for model/artifacts/*.pkl or *.json here.
 
 # Development files
 *.ipynb

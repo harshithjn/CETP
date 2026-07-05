@@ -6,7 +6,9 @@ services:
       - "8000:8000"
     volumes:
       - ~/.cetp:/root/.cetp
-      - ./model/artifacts:/app/model/artifacts
+      # model/artifacts is now baked into the image at build time (see
+      # Dockerfile). Do not re-add this mount — a host checkout without the
+      # .pkl pulled would shadow the baked-in artifact with an empty dir.
     environment:
       - PYTHONPATH=/app/src
       - CETP_ENV=production
@@ -25,7 +27,8 @@ services:
       - "8001:8000"
     volumes:
       - ~/.cetp:/root/.cetp
-      - ./model/artifacts:/app/model/artifacts
+      # model/artifacts is baked into the image at build time (see Dockerfile);
+      # do not re-add a mount here, it would shadow the baked-in artifact.
       - ./src:/app/src
       - ./api:/app/api
     environment:
@@ -40,7 +43,8 @@ services:
     container_name: cetp-cli
     volumes:
       - ~/.cetp:/root/.cetp
-      - ./model/artifacts:/app/model/artifacts
+      # model/artifacts is baked into the image at build time (see Dockerfile);
+      # do not re-add a mount here, it would shadow the baked-in artifact.
       - ./data:/data
     environment:
       - PYTHONPATH=/app/src

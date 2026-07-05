@@ -33,8 +33,12 @@ jobs:
     needs: lint
     strategy:
       fail-fast: false
+      # Python version constrained by xgboost==3.2.0 (requires >=3.10),
+      # pinned for pickle-deserialization compatibility with the trained
+      # model artifact. Do not add older Python versions (e.g. 3.9) without
+      # first verifying dependency compatibility.
       matrix:
-        python-version: ["3.9", "3.11"]
+        python-version: ["3.11"]
 
     steps:
       - uses: actions/checkout@v4
