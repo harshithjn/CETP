@@ -30,6 +30,16 @@ CETP (Cross-Environment Execution Time Prediction) uses machine learning to esti
 pip install cetp
 ```
 
+`cetp measure` runs real ResNet18/ResNet50/MobileNetV2/DistilBERT inference locally
+via torch/torchvision/transformers to benchmark the current machine. `pyproject.toml`
+can't pin a custom package index per-dependency, so a plain `pip install cetp` pulls
+whichever default torch/torchvision build PyPI serves for your platform. For a
+guaranteed CPU-only install (matching every machine used during data collection):
+
+```bash
+pip install cetp --extra-index-url https://download.pytorch.org/whl/cpu
+```
+
 ---
 
 ## Quick Start

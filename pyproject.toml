@@ -38,6 +38,17 @@ dependencies = [
   # pickled Pipeline incorrectly without raising an error.
   "scikit-learn==1.6.1",
   "pydantic>=2.0",
+  # CPU-only inference for `cetp measure`'s reference workloads (resnet18/50,
+  # mobilenet, distilbert). pyproject.toml cannot pin a custom package index
+  # per-dependency, so a plain `pip install cetp` will pull whatever default
+  # torch/torchvision build PyPI serves for the platform (CPU-only on macOS;
+  # may include an unneeded CUDA build on Linux). For a guaranteed CPU-only
+  # install matching every machine used during data collection, install with:
+  #   pip install cetp --extra-index-url https://download.pytorch.org/whl/cpu
+  # See README for details.
+  "torch>=2.0",
+  "torchvision>=0.15",
+  "transformers>=4.30",
 ]
 
 [project.scripts]

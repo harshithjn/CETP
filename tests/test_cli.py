@@ -462,7 +462,46 @@ def test_predict_json_output_is_valid_json():
     payload = json.loads(result.output)
     assert "predicted_runtime_sec" in payload
     assert "sla_flag" in payload
-    assert "shap_features" in payload
+    assert "top_shap_features" in payload
+
+
+def test_predict_json_output_matches_api_response_schema():
+    """cetp predict --json and api/main.py's PredictResponse describe the same
+    prediction and must expose the same field names — this is what would have
+    caught the CLI/API drift (shap_features vs top_shap_features, missing
+    sla_threshold_sec) before it reached the VS Code extension."""
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--model",
+            "resnet18",
+            "--complexity",
+            "3",
+            "--cpu-cores",
+            "4",
+            "--memory-gb",
+            "8",
+            "--json",
+        ],
+    )
+    assert result.exit_code in (0, 1), result.output
+    payload = json.loads(result.output)
+
+    api_response_fields = {
+        "predicted_runtime_sec",
+        "confidence_interval",
+        "confidence_status",
+        "confidence_warnings",
+        "sla_flag",
+        "sla_threshold_sec",
+        "top_shap_features",
+        "model_used",
+        "complexity_level",
+    }
+    missing = api_response_fields - payload.keys()
+    assert not missing, f"cetp predict --json is missing fields present in PredictResponse: {missing}"
 
 
 def test_predict_fail_on_red_exits_nonzero_when_red():
@@ -487,6 +526,44 @@ def test_predict_fail_on_red_exits_nonzero_when_red():
     )
     assert "SLA status: RED" in result.output
     assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# cetp measure
+#
+# No test here actually runs a real workload (unlike predict, which only
+# evaluates an already-trained model in milliseconds, `measure` runs real
+# torch/torchvision/transformers inference — 90+ seconds even at the
+# lightest complexity level on this machine, per real calibration). Adding
+# a "does it actually measure" test to this suite would make every
+# `pytest --cov=src/cetp` run 90+ seconds slower by default; that's flagged
+# here rather than silently done. Only fast argument-validation is covered,
+# mirroring predict's equivalent tests.
+# ---------------------------------------------------------------------------
+
+
+def test_measure_requires_model():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--complexity", "1"])
+    assert result.exit_code != 0
+
+
+def test_measure_requires_complexity():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--model", "resnet18"])
+    assert result.exit_code != 0
+
+
+def test_measure_rejects_invalid_model_choice():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--model", "bert-large", "--complexity", "1"])
+    assert result.exit_code != 0
+
+
+def test_measure_rejects_complexity_out_of_range():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--model", "resnet18", "--complexity", "6"])
+    assert result.exit_code != 0
 
 
 # ---------------------------------------------------------------------------

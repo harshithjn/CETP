@@ -1,6 +1,14 @@
 """
 Canonical complexity-to-workload mapping, derived from real calibration data
 on the 'large' reference tier.
+
+These (batch_size, num_iterations) pairs are baked into the trained model as
+feature values (see predictor.py's predict(), which passes them straight into
+the row fed to the fitted pipeline) — they must stay exactly as they were
+during original data collection, or every `cetp predict` prediction silently
+drifts for a given complexity_level without the model being retrained. This
+map is NOT the place to encode per-machine local benchmark timing; see
+measure_calibration.py for that (used only by `cetp measure`).
 """
 
 WORKLOAD_COMPLEXITY_MAP = {

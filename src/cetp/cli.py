@@ -348,6 +348,7 @@ def predict(
         sys.exit(1)
 
     upper = result["confidence_interval"][1]
+    sla_limit = None
     try:
         sla_flag = predictor.compute_sla_flag(upper, model_name)
         sla_limit = predictor._sla_config[model_name]["sla_runtime_sec"]
@@ -364,8 +365,9 @@ def predict(
     if as_json:
         output = dict(result)
         output["sla_flag"] = sla_flag
+        output["sla_threshold_sec"] = sla_limit
         output["shap_base_value"] = shap_explanation["base_value"]
-        output["shap_features"] = shap_features
+        output["top_shap_features"] = shap_features
         click.echo(json.dumps(output, indent=2))
     else:
         if result["confidence_status"] == "EXTRAPOLATED":
@@ -401,6 +403,107 @@ def predict(
 
     if fail_on_red and sla_flag == "RED":
         sys.exit(1)
+
+
+# ---------------------------------------------------------------------------
+# cetp measure
+# ---------------------------------------------------------------------------
+
+
+def _run_local_measurement(workload_fn, batch_size: int, num_iterations: int) -> dict:
+    """
+    Times a workload while sampling CPU/memory, using the same primitives
+    build_feature_row() composes for dataset collection (take_snapshot,
+    RuntimeSampler, take_end_snapshot). Not build_feature_row() itself: that
+    function's signature is CSV-row bookkeeping (workload_type, workload_name,
+    run_id, batch_id) irrelevant to a single ad hoc local measurement, and it
+    takes a zero-argument callable where ours needs (batch_size, num_iterations).
+    profiler.py has no standalone measure() — this composes the same pieces
+    build_feature_row() does, directly.
+    """
+    from cetp.profiler import RuntimeSampler, take_snapshot, take_end_snapshot
+
+    sampler = RuntimeSampler(interval_sec=0.5)
+    start_snap = take_snapshot()
+    sampler.start()
+    try:
+        workload_fn(batch_size, num_iterations)
+    finally:
+        sampler.stop()
+    _read_mb, _write_mb, runtime_sec = take_end_snapshot(start_snap)
+    averages = sampler.get_averages()
+
+    return {
+        "runtime_sec": runtime_sec,
+        # averages are computed from psutil bytes/1e9 (profiler.py's own basis,
+        # see RuntimeSampler._sample_loop) — x1000 here matches that same basis.
+        "peak_memory_mb": round(averages["memory_peak_gb"] * 1000, 1),
+        "avg_cpu_pct": averages["cpu_avg_pct"],
+    }
+
+
+@main.command("measure")
+@click.option(
+    "--model",
+    "model_name",
+    required=True,
+    type=click.Choice(["resnet18", "resnet50", "mobilenet", "distilbert"]),
+    help="Which reference workload to run locally.",
+)
+@click.option(
+    "--complexity",
+    required=True,
+    type=click.IntRange(1, 5),
+    help="Workload complexity level, 1 (lightest) to 5 (heaviest).",
+)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+def measure(model_name: str, complexity: int, as_json: bool) -> None:
+    """Actually run the reference benchmark for a model/complexity LOCALLY.
+
+    Runs the real torch/torchvision/transformers inference workload on this
+    machine (no predictor, no trained model involved) and reports the real
+    measured runtime, peak memory, and average CPU utilization.
+
+    Example:
+
+        cetp measure --model resnet18 --complexity 1 --json
+    """
+    from cetp.workload_config import get_workload_params
+    from cetp.measure_calibration import get_measure_iterations
+    from cetp.workloads import WORKLOAD_FUNCTIONS
+
+    # batch_size is shared with `predict` (a workload-definition property);
+    # num_iterations is NOT — it's calibrated per-machine for a reasonable
+    # local wall-clock duration and must stay independent of the trained
+    # predictor's feature space (see measure_calibration.py's docstring).
+    batch_size, _ = get_workload_params(model_name, complexity)
+    num_iterations = get_measure_iterations(model_name, complexity)
+    fn = WORKLOAD_FUNCTIONS[model_name]
+
+    click.echo(
+        f"Running {model_name} at complexity {complexity} "
+        f"(batch={batch_size}, iterations={num_iterations})... "
+        f"this may take 60-400 seconds."
+    )
+
+    result = _run_local_measurement(fn, batch_size, num_iterations)
+
+    output = {
+        "measured_runtime_sec": result["runtime_sec"],
+        "measured_peak_memory_mb": result["peak_memory_mb"],
+        "measured_avg_cpu_pct": result["avg_cpu_pct"],
+        "model_used": model_name,
+        "complexity_level": complexity,
+        "batch_size": batch_size,
+        "num_iterations": num_iterations,
+    }
+
+    if as_json:
+        click.echo(json.dumps(output, indent=2))
+    else:
+        click.echo(f"Measured runtime: {result['runtime_sec']:.1f}s")
+        click.echo(f"Peak memory: {result['peak_memory_mb']:.0f}MB")
+        click.echo(f"Avg CPU: {result['avg_cpu_pct']:.0f}%")
 
 
 # ---------------------------------------------------------------------------
