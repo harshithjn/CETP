@@ -20,9 +20,10 @@ COPY src/ ./src/
 COPY api/ ./api/
 COPY sla_defaults.json .
 COPY pyproject.toml .
+COPY model/artifacts/ ./model/artifacts/
 
-# Placeholders for runtime-mounted volumes
-RUN mkdir -p model/artifacts /root/.cetp
+# BYOD custom models are runtime-supplied by design and must not be baked in
+RUN mkdir -p /root/.cetp
 
 EXPOSE 8000
 

@@ -1,0 +1,29 @@
+{
+  "cpu_count": {
+    "min": 2,
+    "max": 4
+  },
+  "total_memory_mb": {
+    "min": 3911.8,
+    "max": 15785.3
+  },
+  "batch_size": {
+    "min": 8,
+    "max": 128
+  },
+  "num_iterations": {
+    "min": 19,
+    "max": 973
+  },
+  "known_models": [
+    "distilbert",
+    "mobilenet",
+    "resnet18",
+    "resnet50"
+  ],
+  "known_tiers": [
+    "large_full",
+    "m5xlarge",
+    "medium"
+  ]
+}

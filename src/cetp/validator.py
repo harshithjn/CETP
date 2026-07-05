@@ -9,42 +9,30 @@ from pathlib import Path
 from typing import Optional  # noqa: F401 — required for Python 3.9 compat (no X | Y syntax)
 
 REQUIRED_COLUMNS = [
-    "run_id",
-    "workload_type",
-    "workload_name",
-    "workload_complexity",
-    "cpu_cores",
-    "memory_total_gb",
-    "cpu_avg_pct",
-    "effective_cpu",
-    "memory_avg_gb",
-    "memory_pressure",
-    "disk_read_mb",
-    "disk_write_mb",
-    "io_intensity",
-    "disk_type",
-    "disk_speed_class",
+    "cpu_count",
+    "total_memory_mb",
+    "model",
+    "complexity_level",
+    "batch_size",
+    "num_iterations",
     "runtime_sec",
 ]
 
 NUMERIC_COLUMNS = [
-    "workload_complexity",
-    "cpu_cores",
-    "memory_total_gb",
-    "cpu_avg_pct",
-    "effective_cpu",
-    "memory_avg_gb",
-    "memory_pressure",
-    "disk_read_mb",
-    "disk_write_mb",
-    "io_intensity",
-    "disk_speed_class",
+    "cpu_count",
+    "total_memory_mb",
+    "complexity_level",
+    "batch_size",
+    "num_iterations",
     "runtime_sec",
 ]
 
-VALID_WORKLOAD_TYPES = {"ML", "DB", "WEB"}
-VALID_DISK_TYPES = {"HDD", "SSD", "NVMe"}
-MIN_ROW_COUNT = 500
+VALID_MODELS = {"resnet18", "resnet50", "mobilenet", "distilbert"}
+
+# Relaxed from the original 500-row threshold: BYOD companies benchmarking their
+# own infrastructure realistically produce dozens to low-hundreds of runs, not
+# thousands, so 100 rows is treated as the practical minimum for a usable fit.
+MIN_ROW_COUNT = 100
 
 _MAX_ROW_VIOLATIONS = 50
 
@@ -106,7 +94,7 @@ def validate_csv(filepath: str) -> dict:
         )
 
     runtime_values: list = []
-    workload_type_counts: dict = {}
+    model_counts: dict = {}
 
     for i, row in enumerate(rows, start=2):
         if len(violations) >= _MAX_ROW_VIOLATIONS:
@@ -134,56 +122,54 @@ def validate_csv(filepath: str) -> dict:
                     violations.append(f"Row {i}: runtime_sec must be > 0, got {fval}")
                     row_ok = False
 
-            elif col == "memory_pressure":
-                if not (0.0 <= fval <= 1.0):
-                    violations.append(f"Row {i}: memory_pressure must be in [0.0, 1.0], got {fval}")
+            elif col == "total_memory_mb":
+                if fval <= 0:
+                    violations.append(
+                        f"Row {i}: total_memory_mb must be a positive float, got {fval}"
+                    )
                     row_ok = False
 
-            elif col == "cpu_avg_pct":
-                if not (0.0 <= fval <= 100.0):
-                    violations.append(f"Row {i}: cpu_avg_pct must be in [0.0, 100.0], got {fval}")
-                    row_ok = False
-
-            elif col == "workload_complexity":
+            elif col == "complexity_level":
                 int_val = int(fval)
                 if float(int_val) != fval or not (1 <= int_val <= 5):
                     violations.append(
-                        f"Row {i}: workload_complexity must be an integer in [1, 5], got {val}"
+                        f"Row {i}: complexity_level must be an integer in [1, 5], got {val}"
                     )
                     row_ok = False
 
-            elif col == "cpu_cores":
+            elif col == "cpu_count":
                 int_val = int(fval)
                 if float(int_val) != fval or int_val <= 0:
-                    violations.append(f"Row {i}: cpu_cores must be a positive integer, got {val}")
+                    violations.append(f"Row {i}: cpu_count must be a positive integer, got {val}")
                     row_ok = False
 
-            elif col == "disk_speed_class":
+            elif col == "batch_size":
                 int_val = int(fval)
-                if float(int_val) != fval or int_val not in {1, 2, 3}:
+                if float(int_val) != fval or int_val <= 0:
+                    violations.append(f"Row {i}: batch_size must be a positive integer, got {val}")
+                    row_ok = False
+
+            elif col == "num_iterations":
+                int_val = int(fval)
+                if float(int_val) != fval or int_val <= 0:
                     violations.append(
-                        f"Row {i}: disk_speed_class must be one of 1, 2, 3, got {val}"
+                        f"Row {i}: num_iterations must be a positive integer, got {val}"
                     )
                     row_ok = False
 
-        wt = row.get("workload_type", "").strip()
-        if wt not in VALID_WORKLOAD_TYPES:
-            violations.append(
-                f"Row {i}: invalid workload_type '{wt}', "
-                f"must be one of {sorted(VALID_WORKLOAD_TYPES)}"
-            )
+        model = row.get("model", "").strip()
+        if model == "":
+            violations.append(f"Row {i}: empty value in column 'model'")
             row_ok = False
-
-        dt = row.get("disk_type", "").strip()
-        if dt not in VALID_DISK_TYPES:
+        elif model not in VALID_MODELS:
             violations.append(
-                f"Row {i}: invalid disk_type '{dt}', must be one of {sorted(VALID_DISK_TYPES)}"
+                f"Row {i}: invalid model '{model}', must be one of {sorted(VALID_MODELS)}"
             )
             row_ok = False
 
         if row_ok:
             runtime_values.append(float(row.get("runtime_sec", "").strip()))  # already validated
-            workload_type_counts[wt] = workload_type_counts.get(wt, 0) + 1
+            model_counts[model] = model_counts.get(model, 0) + 1
 
     if violations:
         raise ValidationError(violations)
@@ -195,7 +181,7 @@ def validate_csv(filepath: str) -> dict:
         "row_count": row_count,
         "violations": [],
         "columns_found": headers,
-        "workload_type_counts": workload_type_counts,
+        "model_counts": model_counts,
         "runtime_stats": {
             "min": min(runtime_values) if runtime_values else 0.0,
             "max": max(runtime_values) if runtime_values else 0.0,
@@ -210,21 +196,12 @@ def export_schema_template(output_path: str) -> None:
     one example row with realistic placeholder values.
     """
     example_row = {
-        "run_id": "0",
-        "workload_type": "ML",
-        "workload_name": "ml_resnet",
-        "workload_complexity": "3",
-        "cpu_cores": "8",
-        "memory_total_gb": "16.0",
-        "cpu_avg_pct": "45.2",
-        "effective_cpu": "4.384",
-        "memory_avg_gb": "6.4",
-        "memory_pressure": "0.4",
-        "disk_read_mb": "120.5",
-        "disk_write_mb": "34.2",
-        "io_intensity": "10.75",
-        "disk_type": "SSD",
-        "disk_speed_class": "2",
+        "cpu_count": "4",
+        "total_memory_mb": "15785.3",
+        "model": "resnet18",
+        "complexity_level": "3",
+        "batch_size": "32",
+        "num_iterations": "250",
         "runtime_sec": "14.37",
     }
 
@@ -241,17 +218,15 @@ def get_schema_info() -> dict:
     return {
         "required_columns": REQUIRED_COLUMNS,
         "numeric_columns": NUMERIC_COLUMNS,
-        "valid_workload_types": list(VALID_WORKLOAD_TYPES),
-        "valid_disk_types": list(VALID_DISK_TYPES),
+        "valid_models": sorted(VALID_MODELS),
         "min_row_count": MIN_ROW_COUNT,
         "column_constraints": {
+            "cpu_count": "positive integer",
+            "total_memory_mb": "positive float",
+            "model": f"one of {sorted(VALID_MODELS)}",
+            "complexity_level": "integer, [1, 5]",
+            "batch_size": "positive integer",
+            "num_iterations": "positive integer",
             "runtime_sec": "float, > 0",
-            "memory_pressure": "float, [0.0, 1.0]",
-            "workload_type": "one of ML, DB, WEB",
-            "disk_type": "one of HDD, SSD, NVMe",
-            "workload_complexity": "integer, [1, 5]",
-            "cpu_cores": "positive integer",
-            "cpu_avg_pct": "float, [0.0, 100.0]",
-            "disk_speed_class": "integer, one of 1, 2, 3",
         },
     }

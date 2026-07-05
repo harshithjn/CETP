@@ -7,6 +7,7 @@ import os
 from click.testing import CliRunner
 
 from cetp.cli import main
+from cetp.validator import MIN_ROW_COUNT, REQUIRED_COLUMNS, VALID_MODELS
 
 
 # ---------------------------------------------------------------------------
@@ -14,49 +15,23 @@ from cetp.cli import main
 # ---------------------------------------------------------------------------
 
 
-def _make_valid_csv(path: str, n_rows: int = 500) -> None:
-    """Write a CETP-schema-valid CSV with n_rows data rows to path."""
-    fieldnames = [
-        "run_id",
-        "workload_type",
-        "workload_name",
-        "workload_complexity",
-        "cpu_cores",
-        "memory_total_gb",
-        "cpu_avg_pct",
-        "effective_cpu",
-        "memory_avg_gb",
-        "memory_pressure",
-        "disk_read_mb",
-        "disk_write_mb",
-        "io_intensity",
-        "disk_type",
-        "disk_speed_class",
-        "runtime_sec",
-    ]
-    types = ["ML", "DB", "WEB"]
+def _make_valid_csv(path: str, n_rows: int = 150) -> None:
+    """Write a CETP-schema-valid CSV (current cpu_count/total_memory_mb/model/
+    complexity_level/batch_size/num_iterations/runtime_sec schema) with
+    n_rows data rows to path."""
+    models = sorted(VALID_MODELS)
     with open(path, "w", newline="", encoding="utf-8") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
+        writer = csv.DictWriter(fh, fieldnames=REQUIRED_COLUMNS)
         writer.writeheader()
         for i in range(n_rows):
-            wt = types[i % 3]
             writer.writerow(
                 {
-                    "run_id": str(i),
-                    "workload_type": wt,
-                    "workload_name": f"wl_{i}",
-                    "workload_complexity": str((i % 5) + 1),
-                    "cpu_cores": "8",
-                    "memory_total_gb": "16.0",
-                    "cpu_avg_pct": "45.0",
-                    "effective_cpu": "4.4",
-                    "memory_avg_gb": "6.0",
-                    "memory_pressure": "0.375",
-                    "disk_read_mb": "100.0",
-                    "disk_write_mb": "50.0",
-                    "io_intensity": "10.0",
-                    "disk_type": "SSD",
-                    "disk_speed_class": "2",
+                    "cpu_count": str(2 + i % 4),
+                    "total_memory_mb": f"{4000.0 + i * 10:.1f}",
+                    "model": models[i % len(models)],
+                    "complexity_level": str((i % 5) + 1),
+                    "batch_size": str(8 * (1 + i % 4)),
+                    "num_iterations": str(50 + i),
                     "runtime_sec": f"{10.0 + i * 0.1:.2f}",
                 }
             )
@@ -192,15 +167,17 @@ def test_schema_shows_constraints():
 def test_schema_shows_minimum_rows():
     runner = CliRunner()
     result = runner.invoke(main, ["schema"])
-    assert "500" in result.output
+    assert str(MIN_ROW_COUNT) in result.output
 
 
-def test_schema_shows_workload_types():
+def test_schema_shows_valid_models():
+    """workload_type (ML/DB/WEB) no longer exists in the schema — the
+    constrained categorical column is now 'model', with values resnet18/
+    resnet50/mobilenet/distilbert."""
     runner = CliRunner()
     result = runner.invoke(main, ["schema"])
-    assert "ML" in result.output
-    assert "DB" in result.output
-    assert "WEB" in result.output
+    for model_name in sorted(VALID_MODELS):
+        assert model_name in result.output
 
 
 def test_schema_export_creates_file(tmp_path):
@@ -225,25 +202,7 @@ def test_schema_export_file_has_headers(tmp_path):
     with open(export_file, newline="", encoding="utf-8") as fh:
         reader = csv.reader(fh)
         headers = next(reader)
-    required = [
-        "run_id",
-        "workload_type",
-        "workload_name",
-        "workload_complexity",
-        "cpu_cores",
-        "memory_total_gb",
-        "cpu_avg_pct",
-        "effective_cpu",
-        "memory_avg_gb",
-        "memory_pressure",
-        "disk_read_mb",
-        "disk_write_mb",
-        "io_intensity",
-        "disk_type",
-        "disk_speed_class",
-        "runtime_sec",
-    ]
-    for col in required:
+    for col in REQUIRED_COLUMNS:
         assert col in headers, f"Column '{col}' missing from exported template"
 
 
@@ -273,18 +232,18 @@ def test_validate_nonexistent_file_message():
 
 def test_validate_valid_csv(tmp_path):
     csv_file = str(tmp_path / "valid.csv")
-    _make_valid_csv(csv_file, n_rows=500)
+    _make_valid_csv(csv_file, n_rows=150)
     runner = CliRunner()
     result = runner.invoke(main, ["validate", "--data", csv_file])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
 
 
 def test_validate_valid_csv_shows_row_count(tmp_path):
     csv_file = str(tmp_path / "valid.csv")
-    _make_valid_csv(csv_file, n_rows=500)
+    _make_valid_csv(csv_file, n_rows=150)
     runner = CliRunner()
     result = runner.invoke(main, ["validate", "--data", csv_file])
-    assert "500" in result.output
+    assert "150" in result.output
 
 
 def test_validate_invalid_csv_exits_nonzero(tmp_path):
@@ -300,8 +259,8 @@ def test_validate_shows_violations(tmp_path):
     _make_valid_csv(csv_file, n_rows=10)
     runner = CliRunner()
     result = runner.invoke(main, ["validate", "--data", csv_file])
-    # InsufficientDataError message contains row count and minimum
-    assert "10" in result.output or "Insufficient" in result.output or "500" in result.output
+    assert result.exit_code == 1
+    assert f"Insufficient data: 10 rows found, minimum required is {MIN_ROW_COUNT}" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -333,29 +292,33 @@ def test_info_shows_sla_thresholds():
     assert "SLA Thresholds" in result.output
 
 
-def test_info_shows_ml_threshold():
+def test_info_shows_all_four_model_thresholds():
+    """SLA thresholds are now keyed by ML model (resnet18/resnet50/mobilenet/
+    distilbert, see sla_defaults.json), not by the old workload_type
+    (ML/DB/WEB) categories, which no longer exist anywhere in the schema."""
     runner = CliRunner()
     result = runner.invoke(main, ["info"])
-    assert "ML" in result.output
+    for model_name in sorted(VALID_MODELS):
+        assert model_name in result.output
 
 
-def test_info_shows_db_threshold():
+def test_info_shows_resnet18_warn_and_sla_values():
+    """Regression test for the info command's SLA loop: it used to iterate
+    over hardcoded ('ML', 'DB', 'WEB') keys against a model-keyed sla dict,
+    so it silently printed the section header with zero threshold lines."""
     runner = CliRunner()
     result = runner.invoke(main, ["info"])
-    assert "DB" in result.output
+    assert "resnet18" in result.output
+    assert "warn at 234.7s" in result.output
+    assert "SLA limit 393.8s" in result.output
 
 
-def test_info_shows_web_threshold():
+def test_info_shows_active_model_status():
+    """The repo ships a real base_model.pkl artefact (model/artifacts/), so
+    `cetp info` must report it as active rather than the 'no model' fallback."""
     runner = CliRunner()
     result = runner.invoke(main, ["info"])
-    assert "WEB" in result.output
-
-
-def test_info_no_model_message():
-    """No model is trained in the CI/dev environment, so this message is expected."""
-    runner = CliRunner()
-    result = runner.invoke(main, ["info"])
-    assert "No model artefact found" in result.output
+    assert "Base model active" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -363,82 +326,243 @@ def test_info_no_model_message():
 # ---------------------------------------------------------------------------
 
 
-def test_predict_without_model_exits_nonzero():
+def test_predict_requires_model():
     runner = CliRunner()
-    result = runner.invoke(
-        main,
-        [
-            "predict",
-            "--workload-type",
-            "ML",
-            "--workload-name",
-            "test_wl",
-            "--complexity",
-            "3",
-        ],
-    )
-    assert result.exit_code == 1
-
-
-def test_predict_without_model_shows_message():
-    runner = CliRunner()
-    result = runner.invoke(
-        main,
-        [
-            "predict",
-            "--workload-type",
-            "ML",
-            "--workload-name",
-            "test_wl",
-            "--complexity",
-            "3",
-        ],
-    )
-    assert "model" in result.output.lower() or "artefact" in result.output.lower()
-
-
-def test_predict_requires_workload_type():
-    runner = CliRunner()
-    result = runner.invoke(
-        main,
-        [
-            "predict",
-            "--workload-name",
-            "test_wl",
-            "--complexity",
-            "3",
-        ],
-    )
-    assert result.exit_code != 0
-
-
-def test_predict_requires_workload_name():
-    runner = CliRunner()
-    result = runner.invoke(
-        main,
-        [
-            "predict",
-            "--workload-type",
-            "ML",
-            "--complexity",
-            "3",
-        ],
-    )
+    result = runner.invoke(main, ["predict", "--complexity", "3"])
     assert result.exit_code != 0
 
 
 def test_predict_requires_complexity():
     runner = CliRunner()
+    result = runner.invoke(main, ["predict", "--model", "resnet18"])
+    assert result.exit_code != 0
+
+
+def test_predict_rejects_invalid_model_choice():
+    """--model only accepts the 4 known models; anything else is a click UsageError."""
+    runner = CliRunner()
+    result = runner.invoke(main, ["predict", "--model", "bert-large", "--complexity", "3"])
+    assert result.exit_code != 0
+
+
+def test_predict_rejects_complexity_out_of_range():
+    runner = CliRunner()
+    result = runner.invoke(main, ["predict", "--model", "resnet18", "--complexity", "6"])
+    assert result.exit_code != 0
+
+
+def test_predict_success_prints_result():
+    """A valid in-range prediction against the real base model succeeds and
+    prints the documented human-readable sections."""
+    runner = CliRunner()
     result = runner.invoke(
         main,
         [
             "predict",
-            "--workload-type",
-            "ML",
-            "--workload-name",
-            "test_wl",
+            "--model",
+            "resnet18",
+            "--complexity",
+            "3",
+            "--cpu-cores",
+            "4",
+            "--memory-gb",
+            "8",
         ],
     )
+    assert result.exit_code in (0, 1), result.output  # 1 only via --fail-on-red, not set here
+    assert "=== Prediction Result ===" in result.output
+    assert "Model: resnet18 (complexity 3)" in result.output
+    assert "Predicted runtime:" in result.output
+    assert "Confidence interval:" in result.output
+    assert "Confidence status: RELIABLE" in result.output
+    assert "SLA status:" in result.output
+    assert "Top factors:" in result.output
+
+
+def test_predict_extrapolated_hardware_shows_warning_block():
+    """Hardware far outside the trained range must surface a visible warning
+    block naming every violated range, before the rest of the output."""
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--model",
+            "resnet18",
+            "--complexity",
+            "3",
+            "--cpu-cores",
+            "32",
+            "--memory-gb",
+            "64",
+        ],
+    )
+    assert result.exit_code in (0, 1), result.output
+    assert "WARNING" in result.output
+    assert "cpu_count=32 is outside the trained range" in result.output
+    assert "total_memory_mb=65536.0" in result.output
+    assert "Confidence status: EXTRAPOLATED" in result.output
+    # The warning block must appear before the prediction result section.
+    assert result.output.index("WARNING") < result.output.index("=== Prediction Result ===")
+
+
+def test_predict_memory_gb_converts_using_binary_1024(monkeypatch):
+    """--memory-gb 8 must become total_memory_mb=8192.0 (binary GB, matching
+    psutil.virtual_memory().total-derived training data), not 8000.0 (decimal).
+    total_memory_mb isn't echoed back in predictor.predict()'s result dict, so
+    the actual value passed in is captured directly by spying on the method."""
+    from cetp.predictor import CETPPredictor
+
+    captured = {}
+    original_predict = CETPPredictor.predict
+
+    def _spy_predict(self, model_name, complexity_level, cpu_count, total_memory_mb):
+        captured["total_memory_mb"] = total_memory_mb
+        return original_predict(self, model_name, complexity_level, cpu_count, total_memory_mb)
+
+    monkeypatch.setattr(CETPPredictor, "predict", _spy_predict)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--model",
+            "resnet18",
+            "--complexity",
+            "3",
+            "--cpu-cores",
+            "4",
+            "--memory-gb",
+            "8",
+        ],
+    )
+    assert result.exit_code in (0, 1), result.output
+    assert captured["total_memory_mb"] == 8192.0
+
+
+def test_predict_json_output_is_valid_json():
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--model",
+            "resnet18",
+            "--complexity",
+            "3",
+            "--cpu-cores",
+            "4",
+            "--memory-gb",
+            "8",
+            "--json",
+        ],
+    )
+    assert result.exit_code in (0, 1), result.output
+    payload = json.loads(result.output)
+    assert "predicted_runtime_sec" in payload
+    assert "sla_flag" in payload
+    assert "top_shap_features" in payload
+
+
+def test_predict_json_output_matches_api_response_schema():
+    """cetp predict --json and api/main.py's PredictResponse describe the same
+    prediction and must expose the same field names — this is what would have
+    caught the CLI/API drift (shap_features vs top_shap_features, missing
+    sla_threshold_sec) before it reached the VS Code extension."""
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--model",
+            "resnet18",
+            "--complexity",
+            "3",
+            "--cpu-cores",
+            "4",
+            "--memory-gb",
+            "8",
+            "--json",
+        ],
+    )
+    assert result.exit_code in (0, 1), result.output
+    payload = json.loads(result.output)
+
+    api_response_fields = {
+        "predicted_runtime_sec",
+        "confidence_interval",
+        "confidence_status",
+        "confidence_warnings",
+        "sla_flag",
+        "sla_threshold_sec",
+        "top_shap_features",
+        "model_used",
+        "complexity_level",
+    }
+    missing = api_response_fields - payload.keys()
+    assert not missing, f"cetp predict --json is missing fields present in PredictResponse: {missing}"
+
+
+def test_predict_fail_on_red_exits_nonzero_when_red():
+    """resnet18's SLA limit is now grounded in the real training distribution's
+    p90 (393.8s, see sla_defaults.json) — complexity 4 on this hardware predicts
+    an upper bound (~416s) above that limit, so --fail-on-red must force exit 1."""
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "predict",
+            "--model",
+            "resnet18",
+            "--complexity",
+            "4",
+            "--cpu-cores",
+            "4",
+            "--memory-gb",
+            "8",
+            "--fail-on-red",
+        ],
+    )
+    assert "SLA status: RED" in result.output
+    assert result.exit_code == 1
+
+
+# ---------------------------------------------------------------------------
+# cetp measure
+#
+# No test here actually runs a real workload (unlike predict, which only
+# evaluates an already-trained model in milliseconds, `measure` runs real
+# torch/torchvision/transformers inference — 90+ seconds even at the
+# lightest complexity level on this machine, per real calibration). Adding
+# a "does it actually measure" test to this suite would make every
+# `pytest --cov=src/cetp` run 90+ seconds slower by default; that's flagged
+# here rather than silently done. Only fast argument-validation is covered,
+# mirroring predict's equivalent tests.
+# ---------------------------------------------------------------------------
+
+
+def test_measure_requires_model():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--complexity", "1"])
+    assert result.exit_code != 0
+
+
+def test_measure_requires_complexity():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--model", "resnet18"])
+    assert result.exit_code != 0
+
+
+def test_measure_rejects_invalid_model_choice():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--model", "bert-large", "--complexity", "1"])
+    assert result.exit_code != 0
+
+
+def test_measure_rejects_complexity_out_of_range():
+    runner = CliRunner()
+    result = runner.invoke(main, ["measure", "--model", "resnet18", "--complexity", "6"])
     assert result.exit_code != 0
 
 
@@ -454,9 +578,13 @@ def test_train_without_data_flag():
 
 
 def test_train_nonexistent_file():
+    """--data uses click.Path(exists=True), so a missing file is rejected by
+    Click's own option parsing (exit code 2, a UsageError) before the train
+    command body — and thus trainer.train() — ever runs."""
     runner = CliRunner()
     result = runner.invoke(main, ["train", "--data", "/nonexistent.csv"])
-    assert result.exit_code == 1
+    assert result.exit_code == 2
+    assert "does not exist" in result.output
 
 
 def test_train_invalid_csv_shows_violations(tmp_path):
@@ -465,7 +593,7 @@ def test_train_invalid_csv_shows_violations(tmp_path):
     runner = CliRunner()
     result = runner.invoke(main, ["train", "--data", csv_file])
     assert result.exit_code == 1
-    assert "10" in result.output or "Insufficient" in result.output or "500" in result.output
+    assert f"Insufficient data: 10 rows found, minimum required is {MIN_ROW_COUNT}" in result.output
 
 
 def test_train_schema_violation_csv_shows_violations(tmp_path):
@@ -478,14 +606,39 @@ def test_train_schema_violation_csv_shows_violations(tmp_path):
     assert "INVALID" in result.output or "workload_type" in result.output or "✗" in result.output
 
 
-def test_train_valid_csv_missing_hyperparams(tmp_path):
-    """Valid 500-row CSV passes validation and reaches trainer, which raises FileNotFoundError."""
-    csv_file = str(tmp_path / "valid.csv")
-    _make_valid_csv(csv_file, n_rows=500)
+def test_train_invokes_trainer_with_correct_call_pattern(tmp_path):
+    """Regression test for the CETPTrainer(output_dir=...) / train(csv_path, sla_path)
+    call pattern: output_dir is an __init__ argument, not a train() argument, and
+    train() takes exactly (csv_path, sla_path). Passing output_dir into train() as a
+    third positional/keyword argument would raise TypeError — this exercises the
+    real cetp train CLI command end-to-end against a schema-correct CSV to confirm
+    that regression can't reappear silently."""
+    from tests.test_trainer import make_training_csv
+
+    csv_path = make_training_csv(tmp_path / "train.csv")
+    output_dir = tmp_path / "cetp_out"
+    sla_path = tmp_path / "sla.json"
+    sla_path.write_text(json.dumps({"resnet18": {"sla_runtime_sec": 300.0, "warn_at_sec": 200.0}}))
+
     runner = CliRunner()
-    result = runner.invoke(main, ["train", "--data", csv_file])
-    assert result.exit_code == 1
-    assert "hyperparameters" in result.output.lower() or "base_hyperparams" in result.output
+    result = runner.invoke(
+        main,
+        [
+            "train",
+            "--data",
+            csv_path,
+            "--sla",
+            str(sla_path),
+            "--output-dir",
+            str(output_dir),
+        ],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "Model saved to" in result.output
+    assert (output_dir / "custom_model.pkl").exists()
+    assert (output_dir / "custom_training_range.json").exists()
+    assert (output_dir / "custom_model_meta.json").exists()
 
 
 # ---------------------------------------------------------------------------

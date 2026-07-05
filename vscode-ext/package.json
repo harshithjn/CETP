@@ -2,7 +2,7 @@
   "name": "cetp",
   "displayName": "CETP — Runtime Prediction",
   "description": "Predict production runtime and SLA status before you deploy. Powered by Cross-Environment Execution Time Prediction.",
-  "version": "0.1.0",
+  "version": "0.1.5",
   "publisher": "cetp-team",
   "engines": {
     "vscode": "^1.85.0"
@@ -27,6 +27,10 @@
         "title": "CETP: Predict Runtime"
       },
       {
+        "command": "cetp.measureAndCompare",
+        "title": "CETP: Measure and Compare"
+      },
+      {
         "command": "cetp.showProfile",
         "title": "CETP: Show Machine Profile"
       },
@@ -45,6 +49,11 @@
           "command": "cetp.predictRuntime",
           "when": "resourceExtname == .py || resourceExtname == .java || resourceExtname == .cpp",
           "group": "cetp@1"
+        },
+        {
+          "command": "cetp.measureAndCompare",
+          "when": "resourceExtname == .py || resourceExtname == .java || resourceExtname == .cpp",
+          "group": "cetp@2"
         }
       ],
       "editor/context": [
@@ -52,6 +61,11 @@
           "command": "cetp.predictRuntime",
           "when": "resourceExtname == .py || resourceExtname == .java || resourceExtname == .cpp",
           "group": "cetp@1"
+        },
+        {
+          "command": "cetp.measureAndCompare",
+          "when": "resourceExtname == .py || resourceExtname == .java || resourceExtname == .cpp",
+          "group": "cetp@2"
         }
       ]
     },

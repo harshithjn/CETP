@@ -14,6 +14,8 @@ from pydantic import BaseModel, Field, field_validator
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import uvicorn
 
+from cetp.workload_config import VALID_MODELS
+
 app = FastAPI(
     title="CETP Prediction API",
     description=(
@@ -41,31 +43,21 @@ _PROJECT_ROOT = Path(__file__).parent.parent
 
 
 class PredictRequest(BaseModel):
-    workload_type: str = Field(..., description="Workload class: ML, DB, or WEB")
-    workload_name: str = Field(..., description="Workload name e.g. ml_resnet, tpch_q3")
-    workload_complexity: int = Field(..., ge=1, le=5, description="Complexity level 1-5")
-    cpu_cores: int = Field(..., gt=0, description="Number of CPU cores")
-    memory_total_gb: float = Field(..., gt=0, description="Total RAM in GB")
-    cpu_avg_pct: float = Field(..., ge=0, le=100, description="Average CPU utilisation %")
-    memory_avg_gb: float = Field(..., ge=0, description="Average memory used in GB")
-    disk_read_mb: float = Field(0.0, ge=0, description="Disk read in MB")
-    disk_write_mb: float = Field(0.0, ge=0, description="Disk write in MB")
-    disk_type: str = Field("SSD", description="Disk type: HDD, SSD, or NVMe")
-    disk_speed_class: int = Field(2, ge=1, le=3, description="Disk speed class 1-3")
-    sla_config: Optional[Dict[str, Any]] = Field(None, description="Custom SLA thresholds")
+    model_name: str = Field(
+        ..., description="ML workload: resnet18, resnet50, mobilenet, or distilbert"
+    )
+    complexity_level: int = Field(..., ge=1, le=5, description="Workload complexity level 1-5")
+    cpu_count: int = Field(..., gt=0, description="Target machine CPU core count")
+    total_memory_mb: float = Field(..., gt=0, description="Target machine total RAM in MB")
+    sla_config: Optional[Dict[str, Any]] = Field(
+        None, description="Custom per-model SLA thresholds, overrides defaults"
+    )
 
-    @field_validator("workload_type")
+    @field_validator("model_name")
     @classmethod
-    def validate_workload_type(cls, v: str) -> str:
-        if v not in ("ML", "DB", "WEB"):
-            raise ValueError("workload_type must be one of ML, DB, WEB")
-        return v
-
-    @field_validator("disk_type")
-    @classmethod
-    def validate_disk_type(cls, v: str) -> str:
-        if v not in ("HDD", "SSD", "NVMe"):
-            raise ValueError("disk_type must be one of HDD, SSD, NVMe")
+    def validate_model_name(cls, v: str) -> str:
+        if v not in VALID_MODELS:
+            raise ValueError(f"model_name must be one of {VALID_MODELS}")
         return v
 
 
@@ -76,14 +68,20 @@ class SHAPFeature(BaseModel):
 
 
 class PredictResponse(BaseModel):
-    runtime_sec: float = Field(..., description="Predicted runtime in seconds")
-    confidence_interval: List[float] = Field(..., description="[lower, upper] bounds")
-    sla_flag: str = Field(..., description="GREEN, YELLOW, or RED")
-    sla_threshold_sec: float = Field(..., description="SLA limit for this workload type")
+    predicted_runtime_sec: float = Field(..., description="Predicted runtime in seconds")
+    confidence_interval: List[float] = Field(..., description="[lower, upper] 90% bounds")
+    confidence_status: str = Field(..., description="RELIABLE or EXTRAPOLATED")
+    confidence_warnings: List[str] = Field(
+        ..., description="Populated when inputs fall outside the training range"
+    )
+    sla_flag: str = Field(..., description="GREEN, YELLOW, RED, or UNKNOWN")
+    sla_threshold_sec: Optional[float] = Field(
+        None, description="SLA limit for this model, null if unconfigured"
+    )
     top_shap_features: List[SHAPFeature] = Field(..., description="Top 3 SHAP contributors")
-    model_used: str = Field(..., description="base or custom")
-    workload_type: str
-    workload_name: str
+    model_artifact: str = Field(..., description="base or custom — which model artefact was used")
+    model_used: str
+    complexity_level: int
 
 
 class HealthResponse(BaseModel):
@@ -93,6 +91,9 @@ class HealthResponse(BaseModel):
     model_path: Optional[str]
     sla_config_loaded: bool
     sla_thresholds: Optional[Dict[str, Any]]
+    training_range: Optional[Dict[str, Any]] = Field(
+        None, description="Hardware/model ranges the active model artefact was trained on"
+    )
 
 
 class ExplainRequest(PredictRequest):
@@ -100,11 +101,12 @@ class ExplainRequest(PredictRequest):
 
 
 class ExplainResponse(BaseModel):
-    base_value: float = Field(..., description="Mean prediction across training set")
-    predicted_value: float
+    base_value: float = Field(..., description="Explainer's expected output over the training set")
+    predicted_runtime_sec: float
+    confidence_status: str = Field(..., description="RELIABLE or EXTRAPOLATED")
     features: List[Dict[str, Any]] = Field(..., description="All features with SHAP values")
-    workload_type: str
-    workload_name: str
+    model_used: str
+    complexity_level: int
 
 
 class ErrorResponse(BaseModel):
@@ -120,23 +122,19 @@ class ErrorResponse(BaseModel):
 
 def load_sla_config(custom_config: Optional[dict] = None) -> dict:
     """
-    Load SLA config with priority:
+    Load per-model SLA config with priority:
     1. custom_config from request body
-    2. ~/.cetp/sla.json
-    3. sla_defaults.json in project root
-    4. hardcoded defaults
+    2. sla_defaults.json in project root
+    3. hardcoded defaults (mirrors the shipped sla_defaults.json)
     """
     _HARDCODED: Dict[str, Any] = {
-        "ML": {"sla_runtime_sec": 20.0, "warn_at_sec": 15.0},
-        "DB": {"sla_runtime_sec": 5.0, "warn_at_sec": 3.5},
-        "WEB": {"sla_runtime_sec": 1.0, "warn_at_sec": 0.7},
+        "resnet18": {"sla_runtime_sec": 393.8, "warn_at_sec": 234.7},
+        "resnet50": {"sla_runtime_sec": 431.9, "warn_at_sec": 237.4},
+        "mobilenet": {"sla_runtime_sec": 587.9, "warn_at_sec": 249.2},
+        "distilbert": {"sla_runtime_sec": 202.9, "warn_at_sec": 183.7},
     }
     if custom_config is not None:
         return custom_config
-    user_path = Path.home() / ".cetp" / "sla.json"
-    if user_path.exists():
-        with open(user_path) as fh:
-            return json.load(fh)
     project_path = _PROJECT_ROOT / "sla_defaults.json"
     if project_path.exists():
         with open(project_path) as fh:
@@ -146,44 +144,32 @@ def load_sla_config(custom_config: Optional[dict] = None) -> dict:
 
 def get_model_status() -> dict:
     """Check which model artefact is available. Returns status and path."""
-    from cetp.predictor import BASE_MODEL_PATH, CETP_DIR
+    from cetp.predictor import BASE_MODEL_PATH, CUSTOM_MODEL_PATH
 
-    custom_path = CETP_DIR / "model.pkl"
-    if custom_path.exists():
-        return {"status": "custom_model_loaded", "path": str(custom_path)}
+    if CUSTOM_MODEL_PATH.exists():
+        return {"status": "custom_model_loaded", "path": str(CUSTOM_MODEL_PATH)}
     if BASE_MODEL_PATH.exists():
         return {"status": "base_model_loaded", "path": str(BASE_MODEL_PATH)}
     return {"status": "no_model", "path": None}
 
 
-def compute_derived_features(request_data: dict) -> dict:
+def get_training_range() -> Optional[dict]:
     """
-    Adds effective_cpu, memory_pressure, io_intensity to a copy of request_data.
-    Uses the same formulas as profiler.py.
-    io_intensity defaults to 0.0 when runtime_sec is absent or zero.
+    Load the training_range.json for whichever model artefact is active
+    (custom takes priority over base, matching CETPPredictor's own resolution
+    order). Returns None if neither file exists.
     """
-    cpu_cores = request_data["cpu_cores"]
-    cpu_avg_pct = request_data["cpu_avg_pct"]
-    memory_avg_gb = request_data["memory_avg_gb"]
-    memory_total_gb = request_data["memory_total_gb"]
-    disk_read_mb = request_data.get("disk_read_mb", 0.0)
-    disk_write_mb = request_data.get("disk_write_mb", 0.0)
-    runtime_sec = request_data.get("runtime_sec", 0.0)
+    from cetp.predictor import BASE_TRAINING_RANGE_PATH, CUSTOM_TRAINING_RANGE_PATH
 
-    effective_cpu = round(cpu_cores * (1.0 - cpu_avg_pct / 100.0), 4)
-    if memory_total_gb > 0:
-        memory_pressure = round(min(max(memory_avg_gb / memory_total_gb, 0.0), 1.0), 4)
-    else:
-        memory_pressure = 0.0
-    io_intensity = (
-        round((disk_read_mb + disk_write_mb) / runtime_sec, 4) if runtime_sec > 0 else 0.0
+    path = (
+        CUSTOM_TRAINING_RANGE_PATH
+        if CUSTOM_TRAINING_RANGE_PATH.exists()
+        else BASE_TRAINING_RANGE_PATH
     )
-
-    result = dict(request_data)
-    result["effective_cpu"] = effective_cpu
-    result["memory_pressure"] = memory_pressure
-    result["io_intensity"] = io_intensity
-    return result
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +187,7 @@ async def health():
     try:
         model_info = get_model_status()
         sla_conf = load_sla_config()
+        training_range = get_training_range()
         return HealthResponse(
             status="ok",
             version="0.1.0",
@@ -208,6 +195,7 @@ async def health():
             model_path=model_info["path"],
             sla_config_loaded=True,
             sla_thresholds=sla_conf,
+            training_range=training_range,
         )
     except Exception:
         return HealthResponse(
@@ -217,18 +205,19 @@ async def health():
             model_path=None,
             sla_config_loaded=False,
             sla_thresholds=None,
+            training_range=None,
         )
 
 
 @app.post("/predict", response_model=PredictResponse, tags=["Prediction"])
 async def predict(request: PredictRequest):
     """
-    Predict production runtime for a workload.
+    Predict production runtime for an ML inference workload.
 
     Provide the target production environment's hardware specifications
     and the workload characteristics. Returns predicted runtime in seconds,
-    a confidence interval, an SLA flag (GREEN/YELLOW/RED), and the top
-    three SHAP features explaining the prediction.
+    a confidence interval, an SLA flag (GREEN/YELLOW/RED/UNKNOWN), and the
+    top three SHAP features explaining the prediction.
 
     Returns 503 if no model artefact is available.
     Returns 422 if request validation fails.
@@ -236,39 +225,56 @@ async def predict(request: PredictRequest):
     try:
         from cetp.predictor import CETPPredictor
 
-        feature_dict = compute_derived_features(request.model_dump(exclude={"sla_config"}))
-        sla_conf = load_sla_config(request.sla_config)
-
         predictor = CETPPredictor()
-        result = predictor.predict(feature_dict)
-        shap_result = predictor.get_shap_explanation(feature_dict)
+        result = predictor.predict(
+            request.model_name, request.complexity_level, request.cpu_count, request.total_memory_mb
+        )
+        shap_result = predictor.get_shap_explanation(
+            request.model_name, request.complexity_level, request.cpu_count, request.total_memory_mb
+        )
 
-        wt = request.workload_type
-        sla_threshold = sla_conf.get(wt, {}).get("sla_runtime_sec", 0.0)
+        sla_conf = load_sla_config(request.sla_config)
+        thresholds = sla_conf.get(request.model_name)
+        if thresholds is not None:
+            upper = result["confidence_interval"][1]
+            warn_at = thresholds["warn_at_sec"]
+            sla_limit = thresholds["sla_runtime_sec"]
+            if upper <= warn_at:
+                sla_flag = "GREEN"
+            elif upper <= sla_limit:
+                sla_flag = "YELLOW"
+            else:
+                sla_flag = "RED"
+            sla_threshold: Optional[float] = sla_limit
+        else:
+            sla_flag = "UNKNOWN"
+            sla_threshold = None
 
         top_shap = [
             SHAPFeature(
                 feature=item["feature"],
                 shap_value=item["shap_value"],
-                direction=("increases_runtime" if item["shap_value"] > 0 else "decreases_runtime"),
+                direction=item["direction"],
             )
-            for item in shap_result[:3]
+            for item in shap_result["features"][:3]
         ]
 
         model_info = get_model_status()
-        model_used = "custom" if model_info["status"] == "custom_model_loaded" else "base"
+        model_artifact = "custom" if model_info["status"] == "custom_model_loaded" else "base"
 
         return PredictResponse(
-            runtime_sec=result["predicted_sec"],
-            confidence_interval=[result["lower_sec"], result["upper_sec"]],
-            sla_flag=result["sla_flag"],
+            predicted_runtime_sec=result["predicted_runtime_sec"],
+            confidence_interval=result["confidence_interval"],
+            confidence_status=result["confidence_status"],
+            confidence_warnings=result["confidence_warnings"],
+            sla_flag=sla_flag,
             sla_threshold_sec=sla_threshold,
             top_shap_features=top_shap,
-            model_used=model_used,
-            workload_type=request.workload_type,
-            workload_name=request.workload_name,
+            model_artifact=model_artifact,
+            model_used=result["model_used"],
+            complexity_level=result["complexity_level"],
         )
-    except (NotImplementedError, FileNotFoundError):
+    except FileNotFoundError:
         return JSONResponse(
             status_code=503,
             content={
@@ -279,6 +285,11 @@ async def predict(request: PredictRequest):
                 ),
                 "status_code": 503,
             },
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "Validation error", "detail": str(exc), "status_code": 422},
         )
     except Exception as exc:
         return JSONResponse(
@@ -307,42 +318,48 @@ async def explain(request: ExplainRequest):
     """
     Get a full SHAP explanation for a prediction.
 
-    Returns the base value (mean prediction), the predicted value,
-    and SHAP values for ALL features — not just the top 3.
-    Use this when you want to understand exactly why the model
-    made a particular prediction.
+    Returns the predicted runtime and SHAP values for ALL features —
+    not just the top 3. Use this when you want to understand exactly
+    why the model made a particular prediction.
 
     Returns 503 if no model artefact is available.
     """
     try:
         from cetp.predictor import CETPPredictor
 
-        feature_dict = compute_derived_features(request.model_dump(exclude={"sla_config"}))
-
         predictor = CETPPredictor()
-        result = predictor.predict(feature_dict)
-        shap_result = predictor.get_shap_explanation(feature_dict)
+        result = predictor.predict(
+            request.model_name, request.complexity_level, request.cpu_count, request.total_memory_mb
+        )
+        # top_n set high enough to always cover every post-aggregation feature
+        # (cpu_count, total_memory_mb, complexity_level, batch_size,
+        # num_iterations, plus the aggregated model feature — 6 total).
+        shap_result = predictor.get_shap_explanation(
+            request.model_name,
+            request.complexity_level,
+            request.cpu_count,
+            request.total_memory_mb,
+            top_n=100,
+        )
 
         features = [
             {
                 "feature": item["feature"],
-                "value": item.get("value", 0.0),
                 "shap_value": item["shap_value"],
-                "direction": (
-                    "increases_runtime" if item["shap_value"] > 0 else "decreases_runtime"
-                ),
+                "direction": item["direction"],
             }
-            for item in shap_result
+            for item in shap_result["features"]
         ]
 
         return ExplainResponse(
-            base_value=0.0,
-            predicted_value=result["predicted_sec"],
+            base_value=shap_result["base_value"],
+            predicted_runtime_sec=result["predicted_runtime_sec"],
+            confidence_status=result["confidence_status"],
             features=features,
-            workload_type=request.workload_type,
-            workload_name=request.workload_name,
+            model_used=result["model_used"],
+            complexity_level=result["complexity_level"],
         )
-    except (NotImplementedError, FileNotFoundError):
+    except FileNotFoundError:
         return JSONResponse(
             status_code=503,
             content={
@@ -353,6 +370,11 @@ async def explain(request: ExplainRequest):
                 ),
                 "status_code": 503,
             },
+        )
+    except ValueError as exc:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "Validation error", "detail": str(exc), "status_code": 422},
         )
     except Exception as exc:
         return JSONResponse(
